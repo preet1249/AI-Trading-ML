@@ -2,10 +2,13 @@
 Twelve Data API Service - REAL DATA
 Stock market data for US, Indian, and global markets
 NO MOCK DATA - All production-ready
+Includes WebSocket streaming for real-time updates
 """
 import aiohttp
 import asyncio
-from typing import List, Dict, Optional
+import websockets
+import json
+from typing import List, Dict, Optional, Callable
 from datetime import datetime
 import logging
 
@@ -155,3 +158,162 @@ class TwelveDataService:
 
 # Singleton instance
 twelve_data_service = TwelveDataService()
+
+
+# ============================================
+# WebSocket Streaming
+# ============================================
+
+class TwelveDataWebSocket:
+    """
+    Real-time Twelve Data WebSocket streams
+
+    Supports:
+    - Price quotes for stocks
+    - Real-time updates for US, Indian, and global markets
+    """
+
+    WS_BASE_URL = "wss://ws.twelvedata.com/v1/quotes/price"
+
+    def __init__(self):
+        self.ws = None
+        self.subscribed_symbols = set()
+        self.callbacks = {}  # {symbol: callback}
+        self.running = False
+
+    async def connect(self):
+        """Establish WebSocket connection"""
+        if not settings.TWELVE_DATA_API_KEY:
+            raise Exception("TWELVE_DATA_API_KEY not configured")
+
+        url = f"{self.WS_BASE_URL}?apikey={settings.TWELVE_DATA_API_KEY}"
+
+        try:
+            self.ws = await websockets.connect(url)
+            self.running = True
+            logger.info("Connected to Twelve Data WebSocket")
+
+            # Start message handler
+            asyncio.create_task(self._handle_messages())
+
+        except Exception as e:
+            logger.error(f"Failed to connect to Twelve Data WS: {e}")
+            raise
+
+    async def _handle_messages(self):
+        """Handle incoming WebSocket messages"""
+        try:
+            async for message in self.ws:
+                try:
+                    data = json.loads(message)
+
+                    # Handle different message types
+                    if data.get("event") == "subscribe-status":
+                        logger.info(f"Subscription status: {data}")
+                    elif data.get("event") == "price":
+                        # Real-time price update
+                        symbol = data.get("symbol")
+                        price_data = {
+                            "symbol": symbol,
+                            "price": float(data.get("price", 0)),
+                            "timestamp": data.get("timestamp")
+                        }
+
+                        # Call callback if exists
+                        callback = self.callbacks.get(symbol)
+                        if callback:
+                            await callback(price_data)
+
+                    elif data.get("event") == "heartbeat":
+                        # Heartbeat - keep connection alive
+                        pass
+
+                except Exception as e:
+                    logger.error(f"Error processing Twelve Data message: {e}")
+
+        except Exception as e:
+            logger.error(f"WebSocket message handler error: {e}")
+            self.running = False
+
+    async def subscribe(
+        self,
+        symbol: str,
+        callback: Callable[[Dict], None]
+    ) -> str:
+        """
+        Subscribe to real-time price updates
+
+        Args:
+            symbol: Stock symbol (e.g., AAPL, RELIANCE.NS)
+            callback: Async function to call with price data
+
+        Returns:
+            Symbol name
+        """
+        if not self.running:
+            await self.connect()
+
+        # Subscribe message
+        subscribe_msg = {
+            "action": "subscribe",
+            "params": {
+                "symbols": symbol
+            }
+        }
+
+        await self.ws.send(json.dumps(subscribe_msg))
+
+        # Store callback
+        self.callbacks[symbol] = callback
+        self.subscribed_symbols.add(symbol)
+
+        logger.info(f"Subscribed to Twelve Data stream: {symbol}")
+        return symbol
+
+    async def unsubscribe(self, symbol: str):
+        """Unsubscribe from a symbol"""
+        if symbol in self.subscribed_symbols:
+            # Unsubscribe message
+            unsubscribe_msg = {
+                "action": "unsubscribe",
+                "params": {
+                    "symbols": symbol
+                }
+            }
+
+            try:
+                await self.ws.send(json.dumps(unsubscribe_msg))
+                self.subscribed_symbols.remove(symbol)
+                if symbol in self.callbacks:
+                    del self.callbacks[symbol]
+                logger.info(f"Unsubscribed from: {symbol}")
+            except Exception as e:
+                logger.error(f"Error unsubscribing: {e}")
+
+    async def close(self):
+        """Close WebSocket connection"""
+        self.running = False
+
+        if self.ws:
+            try:
+                # Unsubscribe from all symbols
+                if self.subscribed_symbols:
+                    unsubscribe_msg = {
+                        "action": "unsubscribe",
+                        "params": {
+                            "symbols": list(self.subscribed_symbols)
+                        }
+                    }
+                    await self.ws.send(json.dumps(unsubscribe_msg))
+
+                await self.ws.close()
+            except:
+                pass
+
+        self.subscribed_symbols.clear()
+        self.callbacks.clear()
+        logger.info("Closed Twelve Data WebSocket connection")
+
+
+# Singleton WebSocket instance
+twelve_data_ws = TwelveDataWebSocket()
