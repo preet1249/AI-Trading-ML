@@ -1,0 +1,17 @@
+"""
+Health Check Endpoint
+"""
+from fastapi import APIRouter
+from datetime import datetime
+
+router = APIRouter()
+
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "service": "ai-trading-predictor",
+    }

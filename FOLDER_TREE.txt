@@ -1,0 +1,36 @@
+AI TRADING PREDICTION MODEL - FOLDER STRUCTURE
+==============================================
+
+trading-agent-ml/
+│
+├── .env.example                    # Root environment template
+├── .gitignore                      # Root gitignore (prevents .env leaks)
+├── README.md                       # Project documentation
+├── PROJECT_STRUCTURE.md            # Detailed structure guide
+├── FOLDER_TREE.txt                 # This file
+├── docker-compose.yml              # Docker orchestration
+│
+├── frontend/                       # Next.js Frontend Application
+│   ├── .env.local.example          # Frontend environment template
+│   ├── .gitignore                  # Frontend gitignore
+│   ├── package.json                # NPM dependencies
+│   ├── tsconfig.json               # TypeScript config
+│   └── src/                        # Source code
+│       ├── app/                    # Next.js pages
+│       ├── components/             # React components
+│       ├── lib/                    # Utilities
+│       └── types/                  # TypeScript types
+│
+├── backend/                        # Python FastAPI Backend
+│   ├── .env.example                # Backend environment template
+│   ├── .gitignore                  # Backend gitignore
+│   ├── requirements.txt            # Python dependencies
+│   └── app/                        # Main application
+│       ├── main.py                 # FastAPI entry
+│       ├── agents/                 # LangGraph agents
+│       ├── core/                   # TA calculations
+│       └── services/               # External services
+│
+└── scripts/                        # Utility scripts
+    ├── setup.sh                    # Setup script
+    └── deploy.sh                   # Deploy script

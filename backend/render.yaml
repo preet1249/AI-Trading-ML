@@ -1,0 +1,16 @@
+# Render Blueprint Configuration
+services:
+  - type: web
+    name: trading-agent-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:socket_app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: ENVIRONMENT
+        value: production
+      - key: PORT
+        value: 8000
+    # Add your environment variables in Render dashboard
+    # OPENROUTER_API_KEY, TWELVE_DATA_API_KEY, etc.
