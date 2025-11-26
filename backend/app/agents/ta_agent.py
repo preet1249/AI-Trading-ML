@@ -11,6 +11,7 @@ import numpy as np
 from app.core.data_fetcher import fetch_candles
 from app.core.indicators import calculate_rsi, calculate_macd, calculate_ema
 from app.core.market_structure import detect_swings, detect_choch_bos, identify_liquidity
+from app.core.advanced_analysis import advanced_analysis
 from app.services.qwen_client import qwen_client
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,32 @@ async def ta_node(state: Dict) -> Dict:
             # Determine trend
             trend = determine_trend(closes, ema20, ema50)
 
+            # ADVANCED ANALYSIS - Fibonacci, Pivots, Order Blocks
+            # Calculate recent high/low for Fibonacci
+            recent_high = max(highs[-20:]) if len(highs) >= 20 else max(highs)
+            recent_low = min(lows[-20:]) if len(lows) >= 20 else min(lows)
+
+            # Fibonacci levels
+            fib_levels = advanced_analysis.calculate_fibonacci_levels(
+                high=recent_high,
+                low=recent_low,
+                trend=trend if trend != "sideways" else "bullish"
+            )
+
+            # Pivot points
+            pivot_points = advanced_analysis.calculate_pivot_points(
+                high=highs[-1],
+                low=lows[-1],
+                close=closes[-1],
+                method="camarilla" if tf in ["1m", "5m"] else "classic"
+            )
+
+            # Order blocks (institutional zones)
+            order_blocks = advanced_analysis.find_order_blocks(candles, lookback=30)
+
+            # Fair value gaps
+            fvgs = advanced_analysis.find_fair_value_gaps(candles, lookback=50)
+
             # Store analysis for this timeframe
             multi_tf_analysis[tf] = {
                 "rsi": rsi,
@@ -134,7 +161,14 @@ async def ta_node(state: Dict) -> Dict:
                 "trend": trend,
                 "current_price": current_price,
                 "price_change_percent": ((current_price - closes[0]) / closes[0]) * 100,
-                "timeframe_type": get_timeframe_type(tf)  # fast/medium/slow
+                "timeframe_type": get_timeframe_type(tf),  # fast/medium/slow
+                # Advanced analysis
+                "fibonacci": fib_levels,
+                "pivots": pivot_points,
+                "order_blocks": order_blocks,
+                "fair_value_gaps": fvgs,
+                "recent_high": recent_high,
+                "recent_low": recent_low
             }
 
         # Determine primary timeframe

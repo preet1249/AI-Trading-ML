@@ -3,10 +3,11 @@ Prediction Agent - INTELLIGENT SYNTHESIS
 Combines TA and News data to generate actionable trading predictions
 """
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import json
 
 from app.services.qwen_client import qwen_client
+from app.core.advanced_analysis import advanced_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -94,12 +95,60 @@ async def predict_node(state: Dict) -> Dict:
         # Generate entry/exit strategy
         strategy = generate_strategy(ta_data, prediction, analysis_type)
 
-        # Compile final prediction
+        # ADVANCED: Calculate intelligent entry and multiple TPs
+        primary_analysis = ta_data.get("primary_analysis", {})
+        current_price = primary_analysis.get("current_price", 0)
+        atr = primary_analysis.get("atr", 0)
+        fib_levels = primary_analysis.get("fibonacci", {})
+        order_blocks = primary_analysis.get("order_blocks", [])
+        market_condition = ta_data.get("market_condition", "unknown")
+        direction = prediction.get("direction", "NEUTRAL")
+
+        # Calculate optimal entry point
+        optimal_entry = advanced_analysis.calculate_optimal_entry(
+            current_price=current_price,
+            direction=direction,
+            fib_levels=fib_levels,
+            order_blocks=order_blocks,
+            atr=atr,
+            market_condition=market_condition
+        )
+
+        # Use optimal entry or prediction entry
+        best_entry = optimal_entry.get("price", current_price)
+        entry_reason = optimal_entry.get("reason", "Current price")
+
+        # Calculate stop loss (use prediction or calculate)
+        stop_loss = prediction.get("stop_loss")
+        if not stop_loss:
+            if direction == "BULLISH":
+                stop_loss = best_entry - (atr * 1.5)
+            elif direction == "BEARISH":
+                stop_loss = best_entry + (atr * 1.5)
+            else:
+                stop_loss = current_price
+
+        # Calculate MULTIPLE TP levels based on market conditions
+        multi_tps = advanced_analysis.calculate_multi_tp_levels(
+            entry=best_entry,
+            stop_loss=stop_loss,
+            direction=direction,
+            market_condition=market_condition,
+            confidence=confidence,
+            atr=atr,
+            fib_levels=fib_levels
+        )
+
+        # Compile final prediction with ADVANCED analysis
         final_prediction = {
             "symbol": symbol,
-            "direction": prediction.get("direction", "NEUTRAL"),
-            "target_price": prediction.get("target_price"),
-            "stop_loss": prediction.get("stop_loss"),
+            "direction": direction,
+            "entry_price": best_entry,
+            "entry_reason": entry_reason,
+            "entry_confidence": optimal_entry.get("confidence", 70),
+            "stop_loss": round(stop_loss, 2),
+            "target_price": multi_tps[0]["price"] if multi_tps else prediction.get("target_price"),  # TP1 as main target
+            "take_profits": multi_tps,  # Multiple TP levels with RR ratios
             "confidence": confidence,
             "risk_level": risk_level,
             "timeframe": ta_data.get("primary_timeframe", "1h"),
@@ -109,7 +158,20 @@ async def predict_node(state: Dict) -> Dict:
             "reasoning": prediction.get("reasoning", ""),
             "ta_summary": summarize_ta(ta_data),
             "news_impact": news_data.get("news_impact", "minimal"),
-            "timestamp": ta_data.get("primary_analysis", {}).get("timestamp")
+            "timestamp": primary_analysis.get("timestamp"),
+            # Advanced levels
+            "fibonacci_levels": {
+                "fib_618": fib_levels.get("fib_618"),
+                "fib_500": fib_levels.get("fib_500"),
+                "fib_382": fib_levels.get("fib_382")
+            },
+            "pivot_points": {
+                "PP": primary_analysis.get("pivots", {}).get("PP"),
+                "R1": primary_analysis.get("pivots", {}).get("R1"),
+                "S1": primary_analysis.get("pivots", {}).get("S1")
+            },
+            "order_blocks": order_blocks[:2] if order_blocks else [],
+            "market_condition": market_condition
         }
 
         logger.info(

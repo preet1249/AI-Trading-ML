@@ -7,7 +7,7 @@ from app.agents.graph import prediction_workflow
 async def test_prediction():
     """Test prediction with real query"""
 
-    query = "Give me prediction for HDFCbank"
+    query = "What's the best entry point for BTC scalping with reversal price and breakout levels?"
 
     print("=" * 80)
     print(f"TESTING PREDICTION WORKFLOW")
@@ -53,12 +53,18 @@ async def test_prediction():
 
         print(f"\nPRICE LEVELS:")
         print(f"  Entry Price: ${prediction.get('entry_price', 'N/A')}")
-        print(f"  Target Price: ${prediction.get('target_price', 'N/A')}")
+        if prediction.get('entry_reason'):
+            print(f"  Entry Reason: {prediction.get('entry_reason')}")
         print(f"  Stop Loss: ${prediction.get('stop_loss', 'N/A')}")
-        if prediction.get('breakout_point'):
-            print(f"  Breakout Point: ${prediction.get('breakout_point')}")
-        if prediction.get('reversal_point'):
-            print(f"  Reversal Point: ${prediction.get('reversal_point')}")
+
+        # Show multiple TP levels
+        take_profits = prediction.get('take_profits', [])
+        if take_profits:
+            print(f"\n💎 MULTIPLE TAKE PROFIT LEVELS:")
+            for tp in take_profits:
+                print(f"  TP{tp['level']}: ${tp['price']} ({tp['rr']}) - {tp['reason']}")
+        else:
+            print(f"  Target Price: ${prediction.get('target_price', 'N/A')}")
 
         print(f"\nMARKET STRUCTURE:")
         print(f"  {prediction.get('market_structure', 'N/A')}")
