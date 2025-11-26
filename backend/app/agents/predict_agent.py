@@ -42,8 +42,28 @@ async def predict_node(state: Dict) -> Dict:
         news_data = state.get("news_data", {})
         analysis_type = state.get("analysis_type", "short_term")
         query = state.get("query", "")
+        market_status = state.get("market_status", {})
+        exchange = state.get("exchange", "Unknown")
+        market_type = state.get("market_type", "unknown")
 
-        logger.info(f"Prediction Agent synthesizing data for {symbol}")
+        logger.info(f"Prediction Agent synthesizing data for {symbol} ({market_type})")
+
+        # Check market hours for stocks
+        if market_type == "stock" and market_status.get("is_open") == False:
+            logger.warning(f"Market closed for {symbol}")
+            return {
+                "prediction": {
+                    "symbol": symbol,
+                    "exchange": exchange,
+                    "market_type": market_type,
+                    "direction": "NEUTRAL",
+                    "confidence": 0,
+                    "market_closed": True,
+                    "reasoning": market_status.get("message", "Market is currently closed"),
+                    "message": market_status.get("message", "Market is currently closed"),
+                    "error": "MARKET_CLOSED"
+                }
+            }
 
         # Check if we have valid data
         if ta_data.get("error") or news_data.get("error"):

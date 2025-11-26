@@ -16,7 +16,8 @@
       "Bash(git push:*)",
       "Bash(\"C:\\Users\\mt\\AI Agents\\Trading agent (ML)\\backend\\app\\api\\predict.py\")",
       "Bash(python -m pip install:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": []

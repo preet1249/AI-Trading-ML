@@ -11,6 +11,7 @@ from app.agents.ta_agent import ta_node
 from app.agents.news_agent import news_node
 from app.agents.predict_agent import predict_node
 from app.services.qwen_client import qwen_client
+from app.services.stock_intelligence import stock_intelligence
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,9 @@ class AgentState(TypedDict):
     ta_data: dict
     news_data: dict
     prediction: dict
+    exchange: str  # NSE, NASDAQ, NYSE, Binance
+    market_type: str  # stock, crypto
+    market_status: dict  # Market open/closed info
 
 
 async def parse_query_node(state: AgentState) -> AgentState:
@@ -43,26 +47,62 @@ async def parse_query_node(state: AgentState) -> AgentState:
     - "should I buy Bitcoin?" → short_term, ["4h", "1h"]
     """
     try:
-        query = state.get("query", "").lower()
+        query = state.get("query", "")
+        query_lower = query.lower()
         logger.info(f"Parsing query: {query}")
 
         # Extract symbol (if not already provided)
         symbol = state.get("symbol")
+        exchange = None
+        market_type = None
+        market_status = {}
+
         if not symbol:
-            symbol = extract_symbol_from_query(query)
-            if not symbol:
-                # Ask Qwen to extract symbol
-                symbol = await extract_symbol_with_qwen(query)
+            # Try intelligent stock detection first
+            stock_symbol, stock_exchange, stock_type = stock_intelligence.detect_and_normalize_symbol(query)
+
+            if stock_symbol:
+                # Stock detected!
+                symbol = stock_symbol
+                exchange = stock_exchange
+                market_type = stock_type
+
+                # Check market hours for stocks
+                is_open, status_msg = stock_intelligence.is_market_open(exchange)
+                market_status = {
+                    "is_open": is_open,
+                    "message": status_msg,
+                    "exchange": exchange
+                }
+
+                logger.info(f"Stock detected: {symbol} on {exchange}")
+                logger.info(f"Market status: {status_msg}")
+
+            else:
+                # Try crypto extraction
+                symbol = extract_symbol_from_query(query)
+                if not symbol:
+                    # Ask Qwen to extract symbol
+                    symbol = await extract_symbol_with_qwen(query)
+
+                # If crypto, no market hours restriction
+                market_type = "crypto"
+                exchange = "Binance"
+                market_status = {
+                    "is_open": True,
+                    "message": "Crypto market is always open (24/7)",
+                    "exchange": exchange
+                }
 
         # Determine analysis type
-        analysis_type = determine_analysis_type(query)
+        analysis_type = determine_analysis_type(query_lower)
 
         # Select appropriate timeframes
-        timeframes = select_timeframes(query, analysis_type)
+        timeframes = select_timeframes(query_lower, analysis_type)
 
         logger.info(
             f"Parsed: symbol={symbol}, type={analysis_type}, "
-            f"timeframes={timeframes}"
+            f"timeframes={timeframes}, exchange={exchange}"
         )
 
         # Update state
@@ -71,18 +111,26 @@ async def parse_query_node(state: AgentState) -> AgentState:
             "symbol": symbol,
             "timeframes": timeframes,
             "analysis_type": analysis_type,
-            "user_id": state.get("user_id", "")
+            "user_id": state.get("user_id", ""),
+            "exchange": exchange or "Unknown",
+            "market_type": market_type or "unknown",
+            "market_status": market_status
         }
 
     except Exception as e:
         logger.error(f"Query parsing error: {e}")
+        import traceback
+        traceback.print_exc()
         # Fallback to defaults
         return {
             "query": state.get("query"),
             "symbol": state.get("symbol", "BTCUSDT"),
             "timeframes": ["1h"],
             "analysis_type": "short_term",
-            "user_id": state.get("user_id", "")
+            "user_id": state.get("user_id", ""),
+            "exchange": "Binance",
+            "market_type": "crypto",
+            "market_status": {"is_open": True, "message": "Crypto 24/7"}
         }
 
 
