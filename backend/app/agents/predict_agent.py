@@ -118,15 +118,29 @@ async def generate_prediction_with_qwen(
     analysis_type: str,
     query: str
 ) -> Dict:
-    """Use Qwen to synthesize TA + News into actionable prediction"""
+    """Use Qwen to synthesize TA + News into actionable prediction with timeframe-aware targets"""
     try:
         # Build comprehensive context
         context = build_prediction_context(symbol, ta_data, news_data, analysis_type, query)
 
+        # Get timeframe-specific guidance
+        primary_tf = ta_data.get("primary_timeframe", "1h")
+        timeframes = ta_data.get("timeframes_analyzed", [primary_tf])
+        primary = ta_data.get("primary_analysis", {})
+        current_price = primary.get("current_price", 0)
+        atr = primary.get("atr", 0)
+
+        # INTELLIGENT TIMEFRAME-BASED TARGET/SL RANGES
+        tf_guidance = get_timeframe_guidance(primary_tf, atr, current_price, analysis_type)
+
         system_prompt = f"""You are an expert ICT/SMC trader. Generate a COMPLETE trading plan with specific entry points and confirmation signals.
 
 **Analysis Type**: {analysis_type}
+**Primary Timeframe**: {primary_tf.upper()}
+**All Timeframes**: {', '.join(timeframes)}
 **User Query**: {query}
+
+{tf_guidance}
 
 Provide a JSON response with ALL these fields:
 {{
@@ -164,6 +178,7 @@ CRITICAL REQUIREMENTS:
 6. **Confirmation**: List 3+ specific signals trader must see before entering
 7. **What to Watch**: Specific candles, patterns, price action to monitor
 8. **Entry Confirmation**: Step-by-step process to confirm trade
+9. **TIMEFRAME APPROPRIATE**: Use the target/SL ranges specified above for {primary_tf}
 
 Be SPECIFIC with prices and signals. No vague advice."""
 
@@ -266,6 +281,63 @@ def build_prediction_context(
         context += f"**AI News Analysis**:\n{news_data['qwen_analysis']}\n\n"
 
     return context
+
+
+def get_timeframe_guidance(timeframe: str, atr: float, current_price: float, analysis_type: str) -> str:
+    """
+    Generate intelligent timeframe-specific guidance for target/SL calculations
+
+    CRITICAL: Different timeframes need different target/SL ranges!
+    - 1m: Tight targets (0.5-1x ATR) for quick scalps
+    - 5m: Small targets (1-2x ATR) for session scalps
+    - 15m: Medium targets (2-3x ATR) for intraday
+    - 1h: Larger targets (3-5x ATR) for day trading
+    - 4h: Big targets (5-8x ATR) for swing entries
+    - 1d: Very large targets (8-15x ATR) for position trades
+    """
+    # Calculate ATR multipliers based on timeframe
+    tf_multipliers = {
+        "1m": {"target": (0.5, 1.0), "sl": (0.3, 0.5), "description": "ultra-tight scalping"},
+        "5m": {"target": (1.0, 2.0), "sl": (0.5, 1.0), "description": "session scalping"},
+        "15m": {"target": (2.0, 3.0), "sl": (1.0, 1.5), "description": "intraday trading"},
+        "1h": {"target": (3.0, 5.0), "sl": (1.5, 2.5), "description": "day trading"},
+        "4h": {"target": (5.0, 8.0), "sl": (2.5, 4.0), "description": "swing trading"},
+        "1d": {"target": (8.0, 15.0), "sl": (4.0, 8.0), "description": "position trading"}
+    }
+
+    multipliers = tf_multipliers.get(timeframe, {"target": (2.0, 4.0), "sl": (1.0, 2.0), "description": "standard trading"})
+
+    # Calculate actual ranges
+    target_min = current_price + (atr * multipliers["target"][0])
+    target_max = current_price + (atr * multipliers["target"][1])
+    sl_min = current_price - (atr * multipliers["sl"][0])
+    sl_max = current_price - (atr * multipliers["sl"][1])
+
+    guidance = f"""
+**TIMEFRAME-SPECIFIC TARGET/SL GUIDANCE for {timeframe.upper()}**:
+
+This is a **{multipliers['description']}** timeframe. Use APPROPRIATE ranges:
+
+- **ATR**: ${atr:.4f} ({(atr/current_price)*100:.2f}% of price)
+- **Current Price**: ${current_price:.2f}
+
+**TARGET RANGE** (for BULLISH):
+  - Minimum: ${target_min:.2f} ({multipliers['target'][0]}x ATR)
+  - Maximum: ${target_max:.2f} ({multipliers['target'][1]}x ATR)
+  - For BEARISH: ${current_price - (atr * multipliers['target'][0]):.2f} to ${current_price - (atr * multipliers['target'][1]):.2f}
+
+**STOP LOSS RANGE**:
+  - Minimum: ${sl_max:.2f} ({multipliers['sl'][1]}x ATR)
+  - Maximum: ${sl_min:.2f} ({multipliers['sl'][0]}x ATR)
+
+⚠️  **IMPORTANT**:
+- For {timeframe} timeframe, DO NOT use targets from daily charts!
+- {timeframe} trades are {multipliers['description']} - use TIGHT stops and realistic targets
+- A $1000 target on 1m is WRONG - it should be ${target_min:.2f}-${target_max:.2f}
+- Risk-reward should be 1:1.5 to 1:3 for this timeframe
+"""
+
+    return guidance
 
 
 def parse_prediction_fallback(response: str) -> Dict:
@@ -372,13 +444,28 @@ def assess_risk_level(ta_data: Dict, news_data: Dict, confidence: int) -> str:
 
 
 def generate_strategy(ta_data: Dict, prediction: Dict, analysis_type: str) -> Dict:
-    """Generate entry/exit strategy"""
+    """Generate timeframe-aware entry/exit strategy"""
     try:
         primary = ta_data.get("primary_analysis", {})
         current_price = primary.get("current_price", 0)
         atr = primary.get("atr", 0)
         ema20 = primary.get("ema20", 0)
         direction = prediction.get("direction", "NEUTRAL")
+        primary_tf = ta_data.get("primary_timeframe", "1h")
+
+        # Get timeframe-specific multipliers
+        tf_multipliers = {
+            "1m": {"target": 0.75, "sl": 0.4},
+            "5m": {"target": 1.5, "sl": 0.75},
+            "15m": {"target": 2.5, "sl": 1.25},
+            "1h": {"target": 4.0, "sl": 2.0},
+            "4h": {"target": 6.5, "sl": 3.0},
+            "1d": {"target": 10.0, "sl": 5.0}
+        }
+
+        multiplier = tf_multipliers.get(primary_tf, {"target": 3.0, "sl": 1.5})
+        target_mult = multiplier["target"]
+        sl_mult = multiplier["sl"]
 
         strategy = {
             "entry": "",
@@ -387,35 +474,45 @@ def generate_strategy(ta_data: Dict, prediction: Dict, analysis_type: str) -> Di
         }
 
         if direction == "BULLISH":
-            # Entry strategy
-            if analysis_type == "scalping":
-                strategy["entry"] = f"Enter on pullback to ${ema20:.2f} (EMA20) or on breakout confirmation"
+            # Entry strategy - timeframe specific
+            if primary_tf in ["1m", "5m"]:
+                strategy["entry"] = f"Enter on micro pullback or immediate breakout (scalp entry)"
+            elif primary_tf in ["15m", "1h"]:
+                strategy["entry"] = f"Enter on pullback to ${ema20:.2f} (EMA20) or structural support"
             else:
-                strategy["entry"] = f"Enter on dips near ${current_price - atr:.2f} with stop loss below ${current_price - (2*atr):.2f}"
+                strategy["entry"] = f"Enter on dips near ${current_price - atr:.2f} with confirmation"
 
-            # Exit strategy
-            target = current_price + (2 * atr)
-            strategy["exit"] = f"Take profit at ${target:.2f} (2x ATR target)"
+            # Timeframe-appropriate targets
+            target = current_price + (target_mult * atr)
+            stop = current_price - (sl_mult * atr)
+
+            strategy["exit"] = f"Take profit at ${target:.2f} ({target_mult}x ATR for {primary_tf})"
             strategy["key_levels"] = [
-                f"Support: ${ema20:.2f}",
+                f"Entry Zone: ${current_price:.2f}",
+                f"Support: ${ema20:.2f}" if ema20 else f"Support: ${current_price - atr:.2f}",
                 f"Target: ${target:.2f}",
-                f"Stop: ${current_price - (2*atr):.2f}"
+                f"Stop Loss: ${stop:.2f}"
             ]
 
         elif direction == "BEARISH":
-            # Entry strategy
-            if analysis_type == "scalping":
-                strategy["entry"] = f"Enter on pullback to ${ema20:.2f} (EMA20) or on breakdown confirmation"
+            # Entry strategy - timeframe specific
+            if primary_tf in ["1m", "5m"]:
+                strategy["entry"] = f"Enter on micro bounce or immediate breakdown (scalp entry)"
+            elif primary_tf in ["15m", "1h"]:
+                strategy["entry"] = f"Enter on rally to ${ema20:.2f} (EMA20) or structural resistance"
             else:
-                strategy["entry"] = f"Enter on rallies near ${current_price + atr:.2f} with stop loss above ${current_price + (2*atr):.2f}"
+                strategy["entry"] = f"Enter on rallies near ${current_price + atr:.2f} with confirmation"
 
-            # Exit strategy
-            target = current_price - (2 * atr)
-            strategy["exit"] = f"Take profit at ${target:.2f} (2x ATR target)"
+            # Timeframe-appropriate targets
+            target = current_price - (target_mult * atr)
+            stop = current_price + (sl_mult * atr)
+
+            strategy["exit"] = f"Take profit at ${target:.2f} ({target_mult}x ATR for {primary_tf})"
             strategy["key_levels"] = [
-                f"Resistance: ${ema20:.2f}",
+                f"Entry Zone: ${current_price:.2f}",
+                f"Resistance: ${ema20:.2f}" if ema20 else f"Resistance: ${current_price + atr:.2f}",
                 f"Target: ${target:.2f}",
-                f"Stop: ${current_price + (2*atr):.2f}"
+                f"Stop Loss: ${stop:.2f}"
             ]
 
         else:

@@ -88,45 +88,43 @@ async def parse_query_node(state: AgentState) -> AgentState:
 
 def extract_symbol_from_query(query: str) -> str:
     """Extract trading symbol from query using pattern matching"""
-    # Common crypto symbols
-    crypto_patterns = [
-        r'\b(BTC|ETH|BNB|XRP|ADA|SOL|DOGE|MATIC|DOT|AVAX|LINK|UNI|ATOM|LTC|ETC|XLM)(USDT|BUSD|USDC|BTC|ETH)?\b',
-        r'\bbitcoin\b',
-        r'\bethereum\b',
-        r'\bbinance\s+coin\b',
-    ]
+    query_lower = query.lower()
 
-    # Stock symbols (2-5 uppercase letters)
-    stock_patterns = [
-        r'\b([A-Z]{2,5})\b(?!.*(?:on|in|at|for|the|and|or|is|are|was))',
-    ]
+    # Map common names to symbols first (exact match)
+    name_to_symbol = {
+        "bitcoin": "BTCUSDT",
+        "btc": "BTCUSDT",
+        "ethereum": "ETHUSDT",
+        "eth": "ETHUSDT",
+        "binance coin": "BNBUSDT",
+        "bnb": "BNBUSDT",
+        "solana": "SOLUSDT",
+        "sol": "SOLUSDT",
+        "cardano": "ADAUSDT",
+        "ada": "ADAUSDT",
+        "ripple": "XRPUSDT",
+        "xrp": "XRPUSDT"
+    }
 
-    # Try crypto patterns first
-    for pattern in crypto_patterns:
-        match = re.search(pattern, query, re.IGNORECASE)
-        if match:
-            symbol = match.group(1).upper()
-            # Map common names to symbols
-            name_to_symbol = {
-                "BITCOIN": "BTCUSDT",
-                "ETHEREUM": "ETHUSDT",
-                "BINANCE": "BNBUSDT",
-            }
-            if symbol in name_to_symbol:
-                return name_to_symbol[symbol]
-            # Check if already has a trading pair suffix (longer than base symbol)
-            has_suffix = False
-            if len(symbol) > 3:  # More than just the base symbol
-                for suffix in ["USDT", "BUSD", "USDC"]:
-                    if symbol.endswith(suffix):
-                        has_suffix = True
-                        break
-            # Add USDT if no suffix present
-            if not has_suffix:
-                return f"{symbol}USDT"
+    # Check for exact matches first
+    for name, symbol in name_to_symbol.items():
+        if re.search(r'\b' + name + r'\b', query_lower):
             return symbol
 
-    # Try stock symbols
+    # Try crypto symbol patterns with optional USDT suffix
+    crypto_pattern = r'\b(BTC|ETH|BNB|XRP|ADA|SOL|DOGE|MATIC|DOT|AVAX|LINK|UNI|ATOM|LTC|ETC|XLM)(USDT|BUSD|USDC|BTC|ETH)?\b'
+    match = re.search(crypto_pattern, query, re.IGNORECASE)
+    if match:
+        symbol = match.group(1).upper()
+        suffix = match.group(2)
+
+        # If suffix exists, use it; otherwise add USDT
+        if suffix:
+            return f"{symbol}{suffix.upper()}"
+        else:
+            return f"{symbol}USDT"
+
+    # Try stock symbols (2-5 uppercase letters)
     words = query.upper().split()
     for word in words:
         if len(word) >= 2 and len(word) <= 5 and word.isalpha():
@@ -167,100 +165,165 @@ Respond with ONLY the symbol, nothing else. If no symbol found, respond with "BT
 
 
 def determine_analysis_type(query: str) -> str:
-    """Determine analysis type from query"""
-    # Long-term indicators
-    long_term_keywords = [
-        "long term", "long-term", "invest", "hold", "hodl",
-        "next month", "next year", "weekly", "monthly",
-        "swing trade", "swing trading", "position"
-    ]
+    """
+    Intelligently determine analysis type from query with context understanding
 
-    # Scalping indicators
-    scalping_keywords = [
-        "scalp", "quick trade", "next move", "right now",
-        "immediate", "1 minute", "5 minute", "minute chart",
-        "intraday", "quick flip"
-    ]
-
-    # Day trading indicators
-    short_term_keywords = [
-        "day trad", "today", "short term", "short-term",
-        "this week", "few days", "daily", "4 hour",
-        "hourly", "15 minute"
-    ]
-
+    ULTRA_SCALPING (1m-5m): Session trading, quick moves, seconds/minutes
+    SCALPING (5m-15m): Intraday, quick trades, within hours
+    SHORT_TERM (15m-4h): Day trading, today, few hours to end of day
+    SWING (4h-1d): Few days, this week, swing trades
+    LONG_TERM (1d-1w): Weeks/months, investing, position trading
+    """
     query_lower = query.lower()
 
-    # Check for long-term
-    if any(keyword in query_lower for keyword in long_term_keywords):
-        return "long_term"
+    # PRIORITY 1: Ultra-scalping (1m-5m) - Session-based, real-time
+    # Keywords: session, scalp, minute, quick, now, immediate
+    ultra_scalping_keywords = [
+        "session",  # "today newyork session" → 1m
+        "london session", "new york session", "ny session", "asian session",
+        "tokyo session", "opening session", "closing session",
+        "scalp", "quick trade", "quick move", "quick flip",
+        "right now", "immediate", "instantly", "real time", "realtime",
+        "1 minute", "1m", "5 minute", "5m", "one minute", "five minute",
+        "minute chart", "minute timeframe", "second", "seconds",
+        "next candle", "next bar", "current candle"
+    ]
 
-    # Check for scalping
+    # PRIORITY 2: Scalping (5m-15m) - Intraday quick trades
+    scalping_keywords = [
+        "intraday", "intra day", "intra-day",
+        "next move", "short move", "quick entry",
+        "next hour", "within hour", "couple hours",
+        "15 minute", "15m", "fifteen minute",
+        "fast trade", "rapid"
+    ]
+
+    # PRIORITY 3: Short-term day trading (15m-4h) - Today's trading
+    short_term_keywords = [
+        "today", "day trad", "end of day", "eod",
+        "this afternoon", "this evening", "this morning",
+        "few hours", "couple of hours", "next few hours",
+        "short term", "short-term",
+        "hourly", "1 hour", "1h", "4 hour", "4h"
+    ]
+
+    # PRIORITY 4: Swing trading (4h-1d) - Multi-day
+    swing_keywords = [
+        "swing", "swing trade", "swing trading",
+        "this week", "few days", "couple days", "next week",
+        "end of week", "eow", "weekly target",
+        "daily chart", "daily timeframe", "1d"
+    ]
+
+    # PRIORITY 5: Long-term (1d-1w+) - Position/investing
+    long_term_keywords = [
+        "long term", "long-term", "invest", "hold", "hodl",
+        "next month", "next year", "this month", "this quarter",
+        "weeks", "months", "years",
+        "position trad", "position size",
+        "monthly", "weekly chart", "1w"
+    ]
+
+    # Check in priority order (most specific first)
+    if any(keyword in query_lower for keyword in ultra_scalping_keywords):
+        return "ultra_scalping"
+
     if any(keyword in query_lower for keyword in scalping_keywords):
         return "scalping"
 
-    # Check for short-term (day trading)
     if any(keyword in query_lower for keyword in short_term_keywords):
         return "short_term"
 
-    # Default to short-term for general queries
+    if any(keyword in query_lower for keyword in swing_keywords):
+        return "swing"
+
+    if any(keyword in query_lower for keyword in long_term_keywords):
+        return "long_term"
+
+    # Default: If query is very short/vague → short_term
+    # "predict BTC" → short_term (4h/1h)
     return "short_term"
 
 
 def select_timeframes(query: str, analysis_type: str) -> List[str]:
     """
-    Select appropriate timeframes based on query and analysis type
+    Intelligently select timeframes based on query and analysis type
 
-    Long-term: Daily + 4H for context
-    Short-term: 4H + 1H + 15M for day trading
-    Scalping: 1H + 15M + 5M for quick moves
+    Multi-timeframe approach: LTF (entry) + MTF (trend) + HTF (bias)
+
+    ULTRA_SCALPING: 1m (entry) + 5m (trend) + 15m (bias)
+    SCALPING: 5m (entry) + 15m (trend) + 1h (bias)
+    SHORT_TERM: 15m (entry) + 1h (trend) + 4h (bias)
+    SWING: 1h (entry) + 4h (trend) + 1d (bias)
+    LONG_TERM: 4h (entry) + 1d (trend) + 1w (bias)
+
+    Examples:
+    - "BTC prediction today newyork session" → ultra_scalping → ["1m", "5m", "15m"]
+    - "scalp ETHUSDT" → scalping → ["5m", "15m", "1h"]
+    - "day trading AAPL today" → short_term → ["15m", "1h", "4h"]
+    - "swing trade BTC this week" → swing → ["1h", "4h", "1d"]
+    - "long term Bitcoin investment" → long_term → ["4h", "1d", "1w"]
     """
+    # Comprehensive timeframe mapping
     timeframe_map = {
-        "long_term": ["1d", "4h"],
-        "short_term": ["4h", "1h", "15m"],
-        "scalping": ["1h", "15m", "5m"]
+        "ultra_scalping": ["1m", "5m", "15m"],  # Session trading
+        "scalping": ["5m", "15m", "1h"],        # Intraday quick trades
+        "short_term": ["15m", "1h", "4h"],      # Day trading
+        "swing": ["1h", "4h", "1d"],            # Multi-day swings
+        "long_term": ["4h", "1d", "1w"]         # Position trading
     }
 
-    # Check if user explicitly mentions timeframes
     query_lower = query.lower()
 
+    # Check if user explicitly mentions timeframes
     explicit_timeframes = []
     timeframe_patterns = {
-        "1m": ["1m", "1 min", "one minute"],
+        "1m": ["1m", "1 min", "one minute", "minute chart"],
         "5m": ["5m", "5 min", "five minute"],
         "15m": ["15m", "15 min", "fifteen minute"],
-        "1h": ["1h", "1 hour", "hourly"],
+        "1h": ["1h", "1 hour", "hourly", "hour chart"],
         "4h": ["4h", "4 hour"],
-        "1d": ["1d", "daily", "day"],
-        "1w": ["1w", "weekly", "week"]
+        "1d": ["1d", "daily", "day chart"],
+        "1w": ["1w", "weekly", "week chart"]
     }
 
     for tf, patterns in timeframe_patterns.items():
         if any(pattern in query_lower for pattern in patterns):
             explicit_timeframes.append(tf)
 
-    # Use explicit timeframes if found
+    # Use explicit timeframes if user specified them
     if explicit_timeframes:
-        # Ensure we have at least 2 timeframes for multi-TF analysis
+        # Ensure multi-TF analysis with complementary timeframes
         if len(explicit_timeframes) == 1:
-            # Add complementary timeframe
-            tf = explicit_timeframes[0]
-            if tf in ["1m", "5m"]:
-                explicit_timeframes.append("15m")
-            elif tf in ["15m", "1h"]:
-                explicit_timeframes.append("4h")
-            elif tf in ["4h", "1d"]:
-                explicit_timeframes.append("1d")
+            base_tf = explicit_timeframes[0]
+            # Add higher timeframe for trend context
+            if base_tf == "1m":
+                explicit_timeframes.extend(["5m", "15m"])
+            elif base_tf == "5m":
+                explicit_timeframes.extend(["15m", "1h"])
+            elif base_tf == "15m":
+                explicit_timeframes.extend(["1h", "4h"])
+            elif base_tf == "1h":
+                explicit_timeframes.extend(["4h", "1d"])
+            elif base_tf == "4h":
+                explicit_timeframes.extend(["1d", "1w"])
+            elif base_tf == "1d":
+                explicit_timeframes.extend(["1w"])
 
-        return explicit_timeframes[:3]  # Max 3 timeframes
+        return explicit_timeframes[:3]  # Max 3 timeframes for efficiency
 
-    # Use default timeframes for analysis type
-    return timeframe_map.get(analysis_type, ["1h"])
+    # Use intelligent defaults based on analysis type
+    return timeframe_map.get(analysis_type, ["15m", "1h", "4h"])
 
 
 def should_skip_news(state: AgentState) -> str:
     """
     Conditional routing: Skip news for ultra-short-term scalping
+
+    News relevance:
+    - Ultra-scalping (1m-5m): Skip news (price action only)
+    - Scalping (5m-15m): Skip news (technical focus)
+    - Short-term+ (15m+): Include news (fundamental impact)
 
     Returns:
         "predict" - skip news, go directly to prediction
@@ -268,21 +331,19 @@ def should_skip_news(state: AgentState) -> str:
     """
     analysis_type = state.get("analysis_type", "short_term")
 
-    # For 1m/5m scalping, news is less relevant - skip it
-    timeframes = state.get("timeframes", [])
-    has_minute_charts = any(tf in ["1m", "5m"] for tf in timeframes)
-
-    if analysis_type == "scalping" and has_minute_charts:
-        logger.info("Skipping news for ultra-short-term scalping")
-        # Set empty news data
+    # Skip news for ultra-fast timeframes (1m-15m)
+    if analysis_type in ["ultra_scalping", "scalping"]:
+        logger.info(f"Skipping news for {analysis_type} - focusing on price action")
+        # Set minimal news data
         state["news_data"] = {
             "sentiment": "neutral",
             "sentiment_score": 0,
-            "news_impact": "minimal",
-            "qwen_analysis": "News skipped for scalping timeframe"
+            "news_impact": f"minimal (news skipped for {analysis_type})",
+            "qwen_analysis": f"News analysis skipped - {analysis_type} focuses on technical price action"
         }
         return "predict"
 
+    # Include news for day trading and beyond (15m+)
     return "news"
 
 

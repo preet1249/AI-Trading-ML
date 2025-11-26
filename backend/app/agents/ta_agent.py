@@ -75,20 +75,46 @@ async def ta_node(state: Dict) -> Dict:
             opens = [c["open"] for c in candles]
             timestamps = [c["timestamp"] for c in candles]
 
-            # Calculate indicators
-            rsi = calculate_rsi(closes)
-            macd = calculate_macd(closes)
-            ema20 = calculate_ema(closes, 20)
-            ema50 = calculate_ema(closes, 50) if len(closes) >= 50 else None
-            ema200 = calculate_ema(closes, 200) if len(closes) >= 200 else None
+            # INTELLIGENT INDICATOR SELECTION based on timeframe
+            # Ultra-fast (1m-5m): Focus on price action + momentum
+            # Medium (15m-1h): Add EMAs for trend
+            # Slow (4h-1d): Include longer EMAs for bias
 
-            # Detect swings and market structure
-            swings = detect_swings(highs, lows, timestamps, order=5)
+            # Always calculate these (relevant for all timeframes)
+            rsi = calculate_rsi(closes)
+            atr = calculate_atr(highs, lows, closes)
+            current_price = closes[-1]
+
+            # Timeframe-specific indicators
+            ema20 = None
+            ema50 = None
+            ema200 = None
+            macd = None
+
+            if tf in ["1m", "5m"]:
+                # Ultra-scalping: Only fast EMA + price action
+                ema20 = calculate_ema(closes, 20)
+                # Skip MACD and longer EMAs (too slow for 1m)
+                logger.info(f"{tf}: Using fast indicators (EMA20, RSI, ATR)")
+            elif tf in ["15m", "1h"]:
+                # Scalping/intraday: Medium-term indicators
+                ema20 = calculate_ema(closes, 20)
+                ema50 = calculate_ema(closes, 50) if len(closes) >= 50 else None
+                macd = calculate_macd(closes)
+                logger.info(f"{tf}: Using medium indicators (EMA20/50, MACD, RSI)")
+            else:
+                # 4h+ : Full indicator suite
+                ema20 = calculate_ema(closes, 20)
+                ema50 = calculate_ema(closes, 50) if len(closes) >= 50 else None
+                ema200 = calculate_ema(closes, 200) if len(closes) >= 200 else None
+                macd = calculate_macd(closes)
+                logger.info(f"{tf}: Using full indicators (EMA20/50/200, MACD, RSI)")
+
+            # Market structure analysis (important for all timeframes)
+            swing_order = 3 if tf in ["1m", "5m"] else 5  # Smaller swings for faster TFs
+            swings = detect_swings(highs, lows, timestamps, order=swing_order)
             structure = detect_choch_bos(swings)
             liquidity = identify_liquidity(highs, lows)
-
-            # Calculate ATR for volatility
-            atr = calculate_atr(highs, lows, closes)
 
             # Determine trend
             trend = determine_trend(closes, ema20, ema50)
@@ -96,7 +122,7 @@ async def ta_node(state: Dict) -> Dict:
             # Store analysis for this timeframe
             multi_tf_analysis[tf] = {
                 "rsi": rsi,
-                "macd": macd,
+                "macd": macd,  # May be None for 1m/5m
                 "ema20": ema20,
                 "ema50": ema50,
                 "ema200": ema200,
@@ -106,8 +132,9 @@ async def ta_node(state: Dict) -> Dict:
                 "liquidity": liquidity[:5],  # Top 5 liquidity levels
                 "atr": atr,
                 "trend": trend,
-                "current_price": closes[-1],
-                "price_change_percent": ((closes[-1] - closes[0]) / closes[0]) * 100
+                "current_price": current_price,
+                "price_change_percent": ((current_price - closes[0]) / closes[0]) * 100,
+                "timeframe_type": get_timeframe_type(tf)  # fast/medium/slow
             }
 
         # Determine primary timeframe
@@ -187,6 +214,23 @@ def determine_trend(closes: List[float], ema20: float, ema50: float = None) -> s
         return "unknown"
 
 
+def get_timeframe_type(tf: str) -> str:
+    """
+    Classify timeframe type for intelligent analysis
+
+    Returns:
+        fast: 1m-5m (price action focus)
+        medium: 15m-1h (trend + momentum)
+        slow: 4h+ (full technical analysis)
+    """
+    if tf in ["1m", "5m"]:
+        return "fast"
+    elif tf in ["15m", "1h"]:
+        return "medium"
+    else:
+        return "slow"
+
+
 def classify_market_condition(analysis: Dict) -> str:
     """Classify market condition"""
     try:
@@ -211,24 +255,48 @@ def classify_market_condition(analysis: Dict) -> str:
 
 
 async def analyze_with_qwen(symbol: str, multi_tf_data: Dict, analysis_type: str) -> str:
-    """Use Qwen to analyze multi-timeframe TA data"""
+    """Use Qwen to analyze multi-timeframe TA data with timeframe-aware context"""
     try:
         context = f"Multi-Timeframe Technical Analysis for {symbol} ({analysis_type} analysis):\n\n"
 
         for tf, data in multi_tf_data.items():
-            context += f"**{tf.upper()} Timeframe:**\n"
+            tf_type = data.get('timeframe_type', 'medium')
+            context += f"**{tf.upper()} Timeframe ({tf_type}):**\n"
+            context += f"- Current Price: ${data.get('current_price', 0):.2f}\n"
             context += f"- Trend: {data.get('trend', 'unknown')}\n"
             context += f"- RSI: {data.get('rsi', 0):.2f}\n"
-            context += f"- Current Price: ${data.get('current_price', 0):.2f}\n"
-            context += f"- EMA20: ${data.get('ema20', 0):.2f}\n"
+            context += f"- ATR: {data.get('atr', 0):.4f}\n"
+
+            # Include indicators based on availability
+            if data.get('ema20'):
+                context += f"- EMA20: ${data.get('ema20', 0):.2f}\n"
+            if data.get('ema50'):
+                context += f"- EMA50: ${data.get('ema50', 0):.2f}\n"
+            if data.get('macd'):
+                macd = data.get('macd', {})
+                context += f"- MACD: {macd.get('histogram', 0):.4f}\n"
+
+            # Market structure
             context += f"- Structure: {data.get('bos') or data.get('choch') or 'No clear break'}\n"
             context += f"- Price Change: {data.get('price_change_percent', 0):.2f}%\n\n"
 
-        system_prompt = """You are an expert ICT/SMC trader. Analyze the multi-timeframe data and provide:
-1. Overall market bias (bullish/bearish/neutral)
-2. Key support/resistance levels
-3. Market structure analysis (CHOCH, BOS)
-4. Trading opportunities
+        # Timeframe-specific system prompt
+        tf_guidance = {
+            "ultra_scalping": "Focus on immediate price action, liquidity sweeps, and quick structural breaks. Look for 1m/5m entries.",
+            "scalping": "Focus on intraday momentum, RSI divergences, and 15m structural confirmations.",
+            "short_term": "Focus on multi-timeframe trend alignment, H1/H4 structure, and day trading setups.",
+            "swing": "Focus on daily/4H structure, major swing points, and multi-day trend continuation.",
+            "long_term": "Focus on weekly/daily trends, major support/resistance, and position trade setups."
+        }
+
+        guidance = tf_guidance.get(analysis_type, "Focus on multi-timeframe confluence")
+
+        system_prompt = f"""You are an expert ICT/SMC trader. Analyze the multi-timeframe data and provide:
+1. Overall market bias (bullish/bearish/neutral) based on HTF→LTF confluence
+2. Key market structure (CHOCH, BOS, liquidity zones)
+3. Price action context for the timeframes analyzed
+
+{guidance}
 
 Be concise (3-4 sentences). Focus on actionable insights."""
 

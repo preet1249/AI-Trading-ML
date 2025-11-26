@@ -7,7 +7,7 @@ from app.agents.graph import prediction_workflow
 async def test_prediction():
     """Test prediction with real query"""
 
-    query = "predict next BTC move for today newyork session"
+    query = "Give me BTC prediction for today newyork session"
 
     print("=" * 80)
     print(f"TESTING PREDICTION WORKFLOW")
