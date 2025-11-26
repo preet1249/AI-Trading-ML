@@ -1,6 +1,8 @@
 """
 Predictions API Routes - LANGGRAPH INTEGRATION
 Handles prediction creation with intelligent multi-agent workflow
+- Saves predictions to MongoDB + Supabase
+- Automatic outcome tracking
 """
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
@@ -10,6 +12,7 @@ import logging
 from app.api.middleware.auth import get_current_user
 from app.agents.graph import prediction_workflow
 from app.models.schemas import User
+from app.services.prediction_service import prediction_service
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +121,42 @@ async def create_prediction(
 
         # Extract prediction data
         prediction = final_state.get("prediction", {})
+
+        # Save prediction to database (MongoDB + Supabase)
+        try:
+            user_id = str(current_user.id) if hasattr(current_user, "id") else "anonymous"
+
+            # Prepare full prediction data for storage
+            prediction_data = {
+                "query": request.query,
+                "symbol": final_state.get("symbol", "UNKNOWN"),
+                "exchange": prediction.get("exchange", ""),
+                "market_type": prediction.get("market_type", "crypto"),
+                "analysis_type": final_state.get("analysis_type", "short_term"),
+                "timeframe": final_state.get("timeframes", ["1h"])[0] if final_state.get("timeframes") else "1h",
+                "direction": prediction.get("direction", "NEUTRAL"),
+                "confidence": prediction.get("confidence", 0),
+                "risk_level": prediction.get("risk_level", "MEDIUM"),
+                "entry_price": prediction.get("entry_price", 0),
+                "entry_reason": prediction.get("entry_reason", ""),
+                "entry_confidence": prediction.get("entry_confidence", 0),
+                "stop_loss": prediction.get("stop_loss", 0),
+                "take_profits": prediction.get("take_profits", []),
+                "fibonacci_levels": prediction.get("fibonacci_levels", {}),
+                "pivot_points": prediction.get("pivot_points", {}),
+                "order_blocks": prediction.get("order_blocks", []),
+                "market_condition": prediction.get("market_condition", ""),
+                "ta_summary": prediction.get("ta_summary", ""),
+                "news_impact": prediction.get("news_impact", ""),
+                "market_closed": prediction.get("market_closed", False)
+            }
+
+            await prediction_service.save_prediction(user_id, prediction_data)
+            logger.info(f"Prediction saved to database for user {user_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to save prediction to database: {e}")
+            # Don't fail the request if saving fails
 
         # Build response
         response = PredictionResponse(
