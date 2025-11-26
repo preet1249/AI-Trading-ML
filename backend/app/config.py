@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # ============================================
     OPENROUTER_API_KEY: str
     OPENROUTER_MODEL: str = "qwen/qwen-2.5-72b-instruct"
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
 
     TWELVE_DATA_API_KEY: str
 
@@ -64,6 +65,7 @@ class Settings(BaseSettings):
     # WebSocket URLs
     # ============================================
     BINANCE_WS_URL: str = "wss://stream.binance.com:9443/ws"
+    BINANCE_REST_URL: str = "https://api.binance.com"
     TWELVE_DATA_WS_URL: str = "wss://ws.twelvedata.com/v1/quotes/price"
 
     # ============================================

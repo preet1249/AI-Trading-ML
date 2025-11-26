@@ -22,7 +22,7 @@ class NewsService:
     async def fetch_news(
         cls,
         symbol: str,
-        days: int = 2,
+        days: int = 1,
         max_results: int = 10
     ) -> List[Dict]:
         """
@@ -30,7 +30,7 @@ class NewsService:
 
         Args:
             symbol: Trading symbol (e.g., BTC, AAPL, TSLA)
-            days: Number of days to look back (default 2)
+            days: Number of days to look back (default 1 - last 24 hours only)
             max_results: Maximum number of results (default 10)
 
         Returns:

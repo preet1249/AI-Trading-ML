@@ -13,7 +13,10 @@
       "Bash(git commit:*)",
       "Bash(git branch:*)",
       "Bash(git remote add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(\"C:\\Users\\mt\\AI Agents\\Trading agent (ML)\\backend\\app\\api\\predict.py\")",
+      "Bash(python -m pip install:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

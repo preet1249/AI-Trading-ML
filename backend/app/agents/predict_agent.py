@@ -123,37 +123,56 @@ async def generate_prediction_with_qwen(
         # Build comprehensive context
         context = build_prediction_context(symbol, ta_data, news_data, analysis_type, query)
 
-        system_prompt = f"""You are an expert ICT/SMC trader with deep knowledge of technical analysis and market psychology.
-
-Analyze the provided technical and fundamental data to generate a trading prediction.
+        system_prompt = f"""You are an expert ICT/SMC trader. Generate a COMPLETE trading plan with specific entry points and confirmation signals.
 
 **Analysis Type**: {analysis_type}
 **User Query**: {query}
 
-Provide a JSON response with:
+Provide a JSON response with ALL these fields:
 {{
     "direction": "BULLISH" | "BEARISH" | "NEUTRAL",
-    "target_price": <float or null>,
-    "stop_loss": <float or null>,
-    "reasoning": "<3-4 sentences explaining the prediction>",
+    "target_price": <float>,
+    "stop_loss": <float>,
+    "entry_price": <specific float price for entry>,
+    "trade_type": "BREAKOUT" | "REVERSAL" | "CONTINUATION",
+    "breakout_point": <price level if breakout>,
+    "reversal_point": <price level if reversal>,
+    "why_breakout_good": "<explain if breakout is valid>",
+    "why_reversal_good": "<explain if reversal setup is valid>",
+    "market_structure": "<CHOCH/BOS/liquidity sweep description>",
+    "confirmation_signals": [
+        "Signal 1: <what to watch>",
+        "Signal 2: <candle pattern>",
+        "Signal 3: <structural confirmation>"
+    ],
+    "what_to_watch": [
+        "<specific price level or candle>",
+        "<structural movement to monitor>",
+        "<indicator confirmation>"
+    ],
+    "entry_confirmation": "<HOW to confirm entry - step by step>",
+    "reasoning": "<detailed 4-5 sentence explanation covering structure, liquidity, and bias>",
     "key_factors": ["<factor 1>", "<factor 2>", "<factor 3>"]
 }}
 
-Consider:
-1. Multi-timeframe alignment (HTF trend + LTF entry)
-2. Market structure (CHOCH, BOS, liquidity)
-3. Sentiment confluence (TA + News)
-4. Risk-reward ratio
-5. Market condition (trending/ranging/volatile)
+CRITICAL REQUIREMENTS:
+1. **Entry Price**: Give EXACT price for entry, not "wait for rallies"
+2. **Trade Type**: Identify if it's breakout/reversal/continuation
+3. **Breakout Analysis**: If breakout, explain why it looks good/bad with price level
+4. **Reversal Analysis**: If reversal, explain why setup is valid with reversal point
+5. **Structure**: Mention CHOCH, BOS, liquidity sweeps, order blocks
+6. **Confirmation**: List 3+ specific signals trader must see before entering
+7. **What to Watch**: Specific candles, patterns, price action to monitor
+8. **Entry Confirmation**: Step-by-step process to confirm trade
 
-Be objective and data-driven. If conflicting signals, lean NEUTRAL."""
+Be SPECIFIC with prices and signals. No vague advice."""
 
         # Generate prediction
         response = await qwen_client.generate(
             prompt=context,
             system_prompt=system_prompt,
             temperature=0.3,
-            max_tokens=500
+            max_tokens=1500  # Increased for detailed predictions
         )
 
         # Parse JSON response

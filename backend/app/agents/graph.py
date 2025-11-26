@@ -114,8 +114,15 @@ def extract_symbol_from_query(query: str) -> str:
             }
             if symbol in name_to_symbol:
                 return name_to_symbol[symbol]
-            # Add USDT if not already present
-            if not any(symbol.endswith(suffix) for suffix in ["USDT", "BUSD", "USDC", "BTC", "ETH"]):
+            # Check if already has a trading pair suffix (longer than base symbol)
+            has_suffix = False
+            if len(symbol) > 3:  # More than just the base symbol
+                for suffix in ["USDT", "BUSD", "USDC"]:
+                    if symbol.endswith(suffix):
+                        has_suffix = True
+                        break
+            # Add USDT if no suffix present
+            if not has_suffix:
                 return f"{symbol}USDT"
             return symbol
 

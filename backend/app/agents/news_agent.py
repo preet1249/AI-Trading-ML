@@ -39,7 +39,7 @@ async def news_node(state: Dict) -> Dict:
         logger.info(f"News Agent analyzing sentiment for {symbol}")
 
         # Fetch recent news
-        news_articles = await NewsService.fetch_news(symbol, num_results=10)
+        news_articles = await NewsService.fetch_news(symbol, max_results=10)
 
         if not news_articles:
             logger.warning(f"No news articles found for {symbol}")
