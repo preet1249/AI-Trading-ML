@@ -125,6 +125,28 @@ class Settings(BaseSettings):
     REQUEST_TIMEOUT: int = 30  # Seconds
     CACHE_TTL: int = 300  # 5 minutes default cache
 
+    # ============================================
+    # Agent Configuration (Qwen AI)
+    # ============================================
+    QWEN_TEMPERATURE: float = 0.7
+    QWEN_MAX_TOKENS: int = 2000
+    AGENT_TIMEOUT: int = 30
+    TA_AGENT_TIMEOUT: int = 10
+    NEWS_AGENT_TIMEOUT: int = 10
+    PREDICT_AGENT_TIMEOUT: int = 10
+
+    # ============================================
+    # Caching TTLs
+    # ============================================
+    TA_CACHE_TTL: int = 60
+    NEWS_CACHE_TTL: int = 600
+
+    # ============================================
+    # Server Configuration
+    # ============================================
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
