@@ -19,7 +19,7 @@ langchain-community==0.0.16
 # AI Model Integration
 # ============================================
 openai==1.10.0
-httpx==0.24.1
+httpx>=0.26.0
 
 # ============================================
 # Technical Analysis
