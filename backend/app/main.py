@@ -114,9 +114,9 @@ async def startup_event():
 
         logger.info("✅ All database connections initialized")
 
-        # Start background task for automatic outcome tracking
-        logger.info("Starting automatic outcome tracker...")
-        asyncio.create_task(outcome_tracker.run_background_checker(interval=60))
+        # Start intelligent background task for outcome tracking (every 12 hours)
+        logger.info("Starting INTELLIGENT outcome tracker (runs every 12 hours)...")
+        asyncio.create_task(outcome_tracker.run_intelligent_checker(interval=43200))  # 12 hours = 43200 seconds
 
         logger.info("✅ Background tasks started")
         logger.info("🎉 AI Trading Predictor API is ready!")
