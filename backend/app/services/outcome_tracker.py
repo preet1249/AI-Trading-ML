@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 
 from app.services.binance import binance_service
-from app.services.twelve_data_service import twelve_data_service
+from app.services.twelve_data import twelve_data_service
 from app.services.prediction_service import prediction_service
 from app.db.mongodb_client import get_mongodb
 
