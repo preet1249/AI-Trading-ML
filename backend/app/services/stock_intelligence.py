@@ -1,13 +1,15 @@
 """
 Stock Intelligence Service
-- Automatic exchange detection (NSE for India, NASDAQ/NYSE for US)
+- AI-powered country and exchange detection
+- Automatic symbol suffix addition (.NS for India, etc.)
 - Market hours validation
-- Symbol normalization
+- Works for ANY company worldwide
 """
 import logging
 from datetime import datetime, time
 from typing import Dict, Optional, Tuple
 import pytz
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +83,21 @@ class StockIntelligence:
         "tatasteel": "TATASTEEL.NS",
         "tata motors": "TATAMOTORS.NS",
         "tatamotors": "TATAMOTORS.NS",
+
+        # Adani Group
         "adani": "ADANIENT.NS",
         "adani enterprises": "ADANIENT.NS",
+        "adani green": "ADANIGREEN.NS",
+        "adani green energy": "ADANIGREEN.NS",
+        "adanigreen": "ADANIGREEN.NS",
+        "adani ports": "ADANIPORTS.NS",
+        "adaniports": "ADANIPORTS.NS",
+        "adani power": "ADANIPOWER.NS",
+        "adanipower": "ADANIPOWER.NS",
+        "adani total gas": "ATGL.NS",
+        "adani gas": "ATGL.NS",
+        "adani transmission": "ADANITRANS.NS",
+        "adanitrans": "ADANITRANS.NS",
 
         # FMCG
         "hindustan unilever": "HINDUNILVR.NS",
@@ -95,7 +110,39 @@ class StockIntelligence:
         "sun pharma": "SUNPHARMA.NS",
         "sunpharma": "SUNPHARMA.NS",
         "dr reddy": "DRREDDY.NS",
-        "cipla": "CIPLA.NS"
+        "cipla": "CIPLA.NS",
+
+        # Telecom & Energy
+        "bharti airtel": "BHARTIARTL.NS",
+        "airtel": "BHARTIARTL.NS",
+        "ntpc": "NTPC.NS",
+        "power grid": "POWERGRID.NS",
+        "powergrid": "POWERGRID.NS",
+        "ongc": "ONGC.NS",
+        "oil and natural gas": "ONGC.NS",
+
+        # Auto
+        "maruti": "MARUTI.NS",
+        "maruti suzuki": "MARUTI.NS",
+        "mahindra": "M&M.NS",
+        "m&m": "M&M.NS",
+        "bajaj auto": "BAJAJ-AUTO.NS",
+        "bajajauto": "BAJAJ-AUTO.NS",
+
+        # Metals & Mining
+        "coal india": "COALINDIA.NS",
+        "coalindia": "COALINDIA.NS",
+        "hindalco": "HINDALCO.NS",
+        "vedanta": "VEDL.NS",
+
+        # Others
+        "larsen": "LT.NS",
+        "l&t": "LT.NS",
+        "larsen and toubro": "LT.NS",
+        "ultratech": "ULTRACEMCO.NS",
+        "ultratech cement": "ULTRACEMCO.NS",
+        "asian paints": "ASIANPAINT.NS",
+        "asianpaint": "ASIANPAINT.NS"
     }
 
     # Market Hours (in local time)
@@ -119,6 +166,88 @@ class StockIntelligence:
             "days": [0, 1, 2, 3, 4]
         }
     }
+
+    @classmethod
+    async def detect_stock_with_ai(cls, query: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """
+        AI-powered stock detection for ANY company worldwide
+        Uses Qwen to detect company, country, and symbol
+        Automatically adds exchange suffixes (.NS for India, etc.)
+
+        Args:
+            query: User query (e.g., "Adani Green Energy prediction", "Tesla analysis")
+
+        Returns:
+            Tuple of (symbol, exchange, market_type)
+            - "Adani Green Energy" → ("ADANIGREEN.NS", "NSE", "stock")
+            - "Tesla" → ("TSLA", "NASDAQ", "stock")
+            - "Reliance Industries" → ("RELIANCE.NS", "NSE", "stock")
+        """
+        try:
+            from app.services.qwen_client import qwen_client
+
+            prompt = f"""Extract stock information from this query: "{query}"
+
+Provide:
+1. Company name
+2. Stock symbol (ticker)
+3. Country (India/US/UK/etc.)
+4. Exchange (NSE/NASDAQ/NYSE/LSE/etc.)
+
+Response format (JSON):
+{{
+    "company": "company name",
+    "symbol": "SYMBOL",
+    "country": "country",
+    "exchange": "exchange"
+}}
+
+Rules:
+- For Indian companies: Provide NSE symbol WITHOUT .NS suffix (we'll add it)
+- For US companies: Provide standard ticker (AAPL, TSLA, etc.)
+- If not sure, use your knowledge to guess the most likely company
+
+Examples:
+Query: "Adani Green Energy"
+{{"company": "Adani Green Energy", "symbol": "ADANIGREEN", "country": "India", "exchange": "NSE"}}
+
+Query: "Tesla stock"
+{{"company": "Tesla Inc", "symbol": "TSLA", "country": "US", "exchange": "NASDAQ"}}
+
+Query: "Reliance Industries"
+{{"company": "Reliance Industries", "symbol": "RELIANCE", "country": "India", "exchange": "NSE"}}
+
+Now extract from: "{query}"
+"""
+
+            response = await qwen_client.generate(prompt, max_tokens=200)
+
+            # Parse JSON response
+            import json
+            # Extract JSON from response
+            json_match = re.search(r'\{[^}]+\}', response)
+            if json_match:
+                data = json.loads(json_match.group())
+
+                symbol = data.get("symbol", "").upper()
+                country = data.get("country", "").lower()
+                exchange = data.get("exchange", "").upper()
+
+                # Add exchange suffix based on country
+                if country == "india" and not symbol.endswith(".NS"):
+                    symbol = f"{symbol}.NS"
+                    exchange = "NSE"
+                elif country in ["us", "usa", "united states"]:
+                    # US stocks don't need suffix
+                    exchange = exchange or "NASDAQ"
+
+                logger.info(f"AI detected stock: {symbol} on {exchange} ({country})")
+                return symbol, exchange, "stock"
+
+        except Exception as e:
+            logger.error(f"AI stock detection failed: {e}")
+
+        return None, None, None
 
     @classmethod
     def detect_and_normalize_symbol(cls, query: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:

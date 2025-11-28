@@ -58,8 +58,8 @@ async def parse_query_node(state: AgentState) -> AgentState:
         market_status = {}
 
         if not symbol:
-            # Try intelligent stock detection first
-            stock_symbol, stock_exchange, stock_type = stock_intelligence.detect_and_normalize_symbol(query)
+            # Try AI-powered stock detection first (works for ANY company worldwide)
+            stock_symbol, stock_exchange, stock_type = await stock_intelligence.detect_stock_with_ai(query)
 
             if stock_symbol:
                 # Stock detected!
