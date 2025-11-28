@@ -12,8 +12,8 @@ from typing import Dict, Optional, List
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-from app.services.binance import get_binance_price
-from app.services.twelve_data_service import get_stock_price
+from app.services.binance import binance_service
+from app.services.twelve_data_service import twelve_data_service
 from app.services.prediction_service import prediction_service
 from app.db.mongodb_client import get_mongodb
 
@@ -59,10 +59,10 @@ class OutcomeTracker:
         """
         try:
             if market_type == "crypto":
-                price = await get_binance_price(symbol)
+                price = await binance_service.get_current_price(symbol)
                 return price
             else:
-                price = await get_stock_price(symbol)
+                price = await twelve_data_service.get_current_price(symbol)
                 return price
 
         except Exception as e:
