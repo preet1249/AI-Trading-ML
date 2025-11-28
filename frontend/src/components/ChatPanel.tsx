@@ -1,12 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import apiClient from '@/lib/api-client';
+import { useChat } from '@/contexts/ChatContext';
 import PredictionDisplay from './PredictionDisplay';
-
-interface Props {
-  selectedSymbol: string;
-  onPriceUpdate: (price: number) => void;
-}
 
 interface Message {
   type: 'user' | 'ai' | 'error';
@@ -14,10 +11,25 @@ interface Message {
   prediction?: any;
 }
 
-export default function ChatPanel({ selectedSymbol }: Props) {
+export default function ChatPanel() {
+  const { currentChat, saveMessage } = useChat();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Load messages from current chat
+  useEffect(() => {
+    if (currentChat) {
+      const chatMessages: Message[] = currentChat.messages.map((msg) => ({
+        type: msg.role === 'user' ? 'user' : 'ai',
+        content: msg.content,
+        prediction: msg.prediction,
+      }));
+      setMessages(chatMessages);
+    } else {
+      setMessages([]);
+    }
+  }, [currentChat]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,30 +41,36 @@ export default function ChatPanel({ selectedSymbol }: Props) {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/predictions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: userMessage, symbol: selectedSymbol })
+      // Call prediction API with natural language query only
+      const response = await apiClient.post('/api/v1/predictions', {
+        query: userMessage,
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        setMessages(prev => [...prev, {
+      if (response.data.success) {
+        const aiMessage: Message = {
           type: 'ai',
-          content: `Analysis for ${data.symbol}`,
-          prediction: data.prediction
-        }]);
+          content: `Analysis for ${response.data.symbol}`,
+          prediction: response.data.prediction,
+        };
+
+        setMessages(prev => [...prev, aiMessage]);
+
+        // Save to chat history
+        await saveMessage(
+          userMessage,
+          aiMessage.content,
+          response.data.prediction
+        );
       } else {
         setMessages(prev => [...prev, {
           type: 'error',
-          content: data.error || 'Failed to get prediction'
+          content: response.data.error || 'Failed to get prediction'
         }]);
       }
-    } catch (error) {
+    } catch (error: any) {
       setMessages(prev => [...prev, {
         type: 'error',
-        content: 'Connection error. Start backend: cd backend && python -m uvicorn app.main:socket_app --reload'
+        content: error.message || 'Failed to connect to server'
       }]);
     } finally {
       setLoading(false);
@@ -68,8 +86,10 @@ export default function ChatPanel({ selectedSymbol }: Props) {
               <svg className="w-16 h-16 mx-auto mb-4 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
               </svg>
-              <p className="text-zinc-500">Ask me about {selectedSymbol}</p>
-              <p className="text-sm text-zinc-600 mt-2">Try: "predict next move for today"</p>
+              <p className="text-zinc-500">Ask me about any crypto or stock</p>
+              <p className="text-sm text-zinc-600 mt-2">
+                Try: "What's the outlook for Bitcoin?" or "Analyze TSLA stock"
+              </p>
             </div>
           </div>
         ) : (
@@ -107,7 +127,7 @@ export default function ChatPanel({ selectedSymbol }: Props) {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about price prediction..."
+            placeholder="Ask about any symbol: BTC, TSLA, AAPL..."
             disabled={loading}
             className="flex-1 px-4 py-3 bg-zinc-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
           />

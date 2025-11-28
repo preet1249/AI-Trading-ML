@@ -19,7 +19,9 @@
       "Bash(python:*)",
       "Bash(pip install:*)",
       "Bash(pip uninstall:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

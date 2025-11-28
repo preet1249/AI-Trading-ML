@@ -24,7 +24,7 @@ from app.db.mongodb_client import mongodb_client
 from app.db.redis_client import redis_client
 
 # New API routes
-from app.api import auth, predictions_api, trades_api, watchlist_api
+from app.api import auth, predictions_api, trades_api, watchlist_api, chat_history
 
 # Middleware
 from app.middleware.rate_limiter import rate_limit_middleware
@@ -84,6 +84,7 @@ app.include_router(predictions.router, prefix="/api/v1", tags=["Predictions"])
 
 # New database-integrated routes
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
+app.include_router(chat_history.router, prefix="/api/v1", tags=["Chat History"])
 app.include_router(predictions_api.router, prefix="/api/v1", tags=["Predictions API"])
 app.include_router(trades_api.router, prefix="/api/v1", tags=["Trades"])
 app.include_router(watchlist_api.router, prefix="/api/v1", tags=["Watchlist"])
