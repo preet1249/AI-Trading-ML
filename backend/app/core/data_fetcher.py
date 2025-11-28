@@ -33,6 +33,9 @@ async def fetch_candles(
         List of candle data with OHLCV format
     """
     try:
+        # Normalize symbol format for Binance (fix BTC-USD → BTCUSDT)
+        symbol = _normalize_symbol(symbol)
+
         # Detect if crypto or stock
         is_crypto = _is_crypto_symbol(symbol)
 
@@ -73,6 +76,8 @@ async def get_current_price(symbol: str) -> float:
         Current price
     """
     try:
+        # Normalize symbol
+        symbol = _normalize_symbol(symbol)
         is_crypto = _is_crypto_symbol(symbol)
 
         if is_crypto:
@@ -84,6 +89,32 @@ async def get_current_price(symbol: str) -> float:
     except Exception as e:
         logger.error(f"Error fetching current price for {symbol}: {str(e)}")
         raise
+
+
+def _normalize_symbol(symbol: str) -> str:
+    """
+    Normalize symbol to correct format for exchanges
+
+    Converts common formats to Binance format:
+    - BTC-USD → BTCUSDT
+    - BTC/USD → BTCUSDT
+    - ETH-USDT → ETHUSDT
+    - AAPL → AAPL (stocks unchanged)
+
+    Args:
+        symbol: Trading symbol in any format
+
+    Returns:
+        Normalized symbol
+    """
+    # Remove hyphens, slashes, spaces
+    symbol = symbol.replace("-", "").replace("/", "").replace(" ", "").upper()
+
+    # Convert USD to USDT for crypto (if not already USDT)
+    if symbol.endswith("USD") and not symbol.endswith("USDT"):
+        symbol = symbol[:-3] + "USDT"
+
+    return symbol
 
 
 def _is_crypto_symbol(symbol: str) -> bool:
