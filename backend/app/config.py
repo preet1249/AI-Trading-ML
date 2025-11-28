@@ -94,7 +94,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list = [
         "http://localhost:3000",
         "http://localhost:3001",
-        "https://your-production-domain.com"
+        "https://ai-trading-ml.vercel.app",  # Production frontend
+        "https://*.vercel.app"  # All Vercel preview deployments
     ]
 
     # ============================================
