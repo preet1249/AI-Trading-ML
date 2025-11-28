@@ -1,19 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function SignupPage() {
   const router = useRouter();
-  const { signup } = useAuth();
+  const { signup, isAuthenticated } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+
+  // Redirect after successful signup (when auth state updates)
+  useEffect(() => {
+    if (shouldRedirect && isAuthenticated) {
+      router.replace('/trade');
+    }
+  }, [isAuthenticated, shouldRedirect, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,10 +43,9 @@ export default function SignupPage() {
 
     try {
       await signup(email, password, fullName || undefined);
-      router.push('/trade');
+      setShouldRedirect(true);
     } catch (err: any) {
       setError(err.message || 'Signup failed. Please try again.');
-    } finally {
       setIsSubmitting(false);
     }
   };
