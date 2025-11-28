@@ -85,14 +85,30 @@ async def parse_query_node(state: AgentState) -> AgentState:
                     # Ask Qwen to extract symbol
                     symbol = await extract_symbol_with_qwen(query)
 
-                # If crypto, no market hours restriction
-                market_type = "crypto"
-                exchange = "Binance"
-                market_status = {
-                    "is_open": True,
-                    "message": "Crypto market is always open (24/7)",
-                    "exchange": exchange
-                }
+                # Determine if crypto or stock based on symbol format
+                from app.core.data_fetcher import _is_crypto_symbol
+                is_crypto = _is_crypto_symbol(symbol) if symbol else False
+
+                if is_crypto:
+                    # Crypto - no market hours restriction
+                    market_type = "crypto"
+                    exchange = "Binance"
+                    market_status = {
+                        "is_open": True,
+                        "message": "Crypto market is always open (24/7)",
+                        "exchange": exchange
+                    }
+                else:
+                    # Stock - assume US market by default
+                    market_type = "stock"
+                    exchange = "US"
+                    is_open, status_msg = stock_intelligence.is_market_open(exchange)
+                    market_status = {
+                        "is_open": is_open,
+                        "message": status_msg,
+                        "exchange": exchange
+                    }
+                    logger.info(f"Stock symbol detected: {symbol} on {exchange}")
 
         # Determine analysis type
         analysis_type = determine_analysis_type(query_lower)
