@@ -1,21 +1,23 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+    if (!isLoading && !isAuthenticated && !isRedirecting) {
+      setIsRedirecting(true);
+      router.replace('/login');
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, isRedirecting, router]);
 
   // Show loading spinner while checking authentication
-  if (isLoading) {
+  if (isLoading || isRedirecting) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
