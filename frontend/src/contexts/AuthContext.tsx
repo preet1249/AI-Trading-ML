@@ -37,11 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
       });
 
-      if (!response.data.success || !response.data.user) {
+      if (!response.data.success || !response.data.data) {
         throw new Error(response.data.message || 'Login failed');
       }
 
-      const { user: userData, access_token, refresh_token } = response.data;
+      // Backend returns: { success, message, data: { user, access_token, refresh_token } }
+      const { user: userData, access_token, refresh_token } = response.data.data;
 
       // Save tokens and user data
       if (access_token) localStorage.setItem('access_token', access_token);
@@ -62,11 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         full_name: fullName,
       });
 
-      if (!response.data.success) {
+      if (!response.data.success || !response.data.data) {
         throw new Error(response.data.message || 'Signup failed');
       }
 
-      const { user_id, email: userEmail, access_token, refresh_token } = response.data;
+      // Backend returns: { success, message, data: { user_id, email, access_token, refresh_token } }
+      const { user_id, email: userEmail, access_token, refresh_token } = response.data.data;
 
       // Create user object
       const userData: User = {
