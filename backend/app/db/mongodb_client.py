@@ -113,6 +113,23 @@ class MongoDBClient:
         """Get AI training data collection"""
         return self.db.training_data
 
+    @property
+    def chats(self) -> AsyncIOMotorCollection:
+        """Get chats collection"""
+        return self.db.chats
+
+    def get_collection(self, collection_name: str) -> AsyncIOMotorCollection:
+        """
+        Get any collection by name
+
+        Args:
+            collection_name: Name of the collection
+
+        Returns:
+            AsyncIOMotorCollection instance
+        """
+        return self.db[collection_name]
+
     async def close(self):
         """Close MongoDB connection"""
         if self._client:

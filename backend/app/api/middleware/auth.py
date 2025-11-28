@@ -1,10 +1,11 @@
 """
 Authentication Middleware
-JWT token verification with Supabase
+JWT token verification with custom JWT
 """
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
+from jwt.exceptions import InvalidTokenError, ExpiredSignatureError, DecodeError
 from typing import Optional
 
 from app.config import settings
@@ -15,7 +16,7 @@ security = HTTPBearer()
 
 async def verify_token(token: str) -> dict:
     """
-    Verify JWT token from Supabase
+    Verify JWT token
 
     Args:
         token: JWT token string
@@ -31,16 +32,16 @@ async def verify_token(token: str) -> dict:
             token,
             settings.SUPABASE_JWT_SECRET,
             algorithms=[settings.JWT_ALGORITHM],
-            audience="authenticated"
+            options={"verify_aud": False}  # Disable audience verification for custom JWT
         )
         return payload
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except jwt.JWTError:
+    except (InvalidTokenError, DecodeError, Exception):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
