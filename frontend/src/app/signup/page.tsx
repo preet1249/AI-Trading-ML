@@ -19,9 +19,15 @@ export default function SignupPage() {
     e.preventDefault();
     setError('');
 
-    // Validate password
+    // Validate password length
     if (password.length < 8) {
       setError('Password must be at least 8 characters long');
+      return;
+    }
+
+    // Check bcrypt byte limit (72 bytes)
+    if (new Blob([password]).size > 72) {
+      setError('Password is too long. Please use a shorter password.');
       return;
     }
 
@@ -108,7 +114,7 @@ export default function SignupPage() {
                 minLength={8}
               />
               <p className="mt-1 text-sm text-gray-400">
-                Minimum 8 characters
+                8-72 characters
               </p>
             </div>
 

@@ -37,7 +37,7 @@ class AuthService:
 
         Args:
             email: User email
-            password: Password (min 8 chars)
+            password: Password (min 8 chars, max 72 bytes for bcrypt)
             full_name: Optional full name
 
         Returns:
@@ -51,6 +51,10 @@ class AuthService:
             if not cls._validate_password(password):
                 return False, "Password must be at least 8 characters", None
 
+            # Bcrypt has 72 byte limit - validate password length
+            if len(password.encode('utf-8')) > 72:
+                return False, "Password is too long (max 72 bytes)", None
+
             # Check if user already exists
             supabase = get_admin_supabase()
             existing_user = supabase.table("users").select("id").eq("email", email).execute()
@@ -58,7 +62,7 @@ class AuthService:
             if existing_user.data:
                 return False, "Email already registered", None
 
-            # Hash password
+            # Hash password (bcrypt truncates at 72 bytes)
             hashed_password = pwd_context.hash(password)
 
             # Create user in users table
