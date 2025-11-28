@@ -50,15 +50,15 @@ class APIResponse(BaseModel):
 @router.post("/signup", response_model=APIResponse)
 async def signup(request: SignupRequest):
     """
-    Create new user account
+    Create new user account (no email verification required)
 
     - **email**: Valid email address
-    - **password**: Minimum 8 characters
+    - **password**: 8-72 characters
     - **full_name**: Optional full name
 
     Returns:
-        - User data with access token
-        - Email verification sent
+        - User data with access token and refresh token
+        - Account is immediately active
     """
     success, message, data = await auth_service.signup(
         email=request.email,

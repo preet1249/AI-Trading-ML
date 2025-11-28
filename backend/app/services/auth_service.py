@@ -33,7 +33,7 @@ class AuthService:
         full_name: Optional[str] = None
     ) -> Tuple[bool, str, Optional[Dict]]:
         """
-        Sign up new user
+        Sign up new user (no email verification required)
 
         Args:
             email: User email
@@ -72,7 +72,6 @@ class AuthService:
                 "full_name": full_name or "",
                 "subscription_tier": "free",
                 "subscription_status": "active",
-                "email_verified": False,
                 "created_at": datetime.utcnow().isoformat(),
                 "last_login": datetime.utcnow().isoformat()
             }
