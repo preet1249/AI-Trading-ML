@@ -204,8 +204,13 @@ async def extract_symbol_with_qwen(query: str) -> str:
     try:
         system_prompt = """Extract the trading symbol from the user query.
 
-If it's a crypto, return the symbol with USDT suffix (e.g., BTCUSDT, ETHUSDT).
-If it's a stock, return just the ticker (e.g., AAPL, GOOGL).
+For CRYPTO: Return symbol with USDT suffix, NO HYPHENS OR SLASHES (e.g., BTCUSDT, ETHUSDT, BNBUSDT)
+For STOCKS: Return just the ticker (e.g., AAPL, GOOGL, TSLA)
+
+IMPORTANT:
+- Use BTCUSDT NOT BTC-USD or BTC/USD
+- Use ETHUSDT NOT ETH-USD or ETH/USDT
+- No spaces, hyphens, or slashes in crypto symbols
 
 Respond with ONLY the symbol, nothing else. If no symbol found, respond with "BTCUSDT"."""
 
@@ -217,6 +222,15 @@ Respond with ONLY the symbol, nothing else. If no symbol found, respond with "BT
         )
 
         symbol = response.strip().upper()
+
+        # Normalize symbol format (fix common mistakes)
+        # BTC-USD → BTCUSDT, BTC/USD → BTCUSDT, ETH-USDT → ETHUSDT
+        symbol = symbol.replace("-", "").replace("/", "").replace(" ", "")
+
+        # If it ends with USD (not USDT), change to USDT
+        if symbol.endswith("USD") and not symbol.endswith("USDT"):
+            symbol = symbol[:-3] + "USDT"
+
         # Validate symbol
         if len(symbol) >= 3 and len(symbol) <= 12:
             return symbol
