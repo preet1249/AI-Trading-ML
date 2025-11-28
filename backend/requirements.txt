@@ -51,11 +51,6 @@ apscheduler>=3.11.1
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 supabase>=2.24.0
-gotrue>=2.24.0
-postgrest>=2.24.0
-realtime>=2.24.0
-storage3>=0.8.1
-supafunc>=2.24.0
 pyjwt>=2.10.1
 
 # ============================================
