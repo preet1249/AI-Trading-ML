@@ -30,18 +30,10 @@ async def fetch_candles(
         limit: Number of candles to fetch
 
     Returns:
-        List of candle data with OHLCV format:
-        [{
-            "timestamp": 1234567890,
-            "open": 100.0,
-            "high": 105.0,
-            "low": 99.0,
-            "close": 103.0,
-            "volume": 1000000.0
-        }, ...]
+        List of candle data with OHLCV format
     """
     try:
-        # Detect if crypto (ends with USDT, BTC, ETH, etc.) or stock
+        # Detect if crypto or stock
         is_crypto = _is_crypto_symbol(symbol)
 
         if is_crypto:
