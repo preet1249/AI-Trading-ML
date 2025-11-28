@@ -11,22 +11,28 @@ export interface AuthTokens {
   expires_at?: string;
 }
 
+// Backend returns: { success, message, data: { user, access_token, refresh_token } }
 export interface LoginResponse {
   success: boolean;
   message: string;
-  user?: User;
-  access_token?: string;
-  refresh_token?: string;
-  expires_at?: string;
+  data: {
+    user: User;
+    access_token: string;
+    refresh_token: string;
+    expires_at?: string;
+  };
 }
 
+// Backend returns: { success, message, data: { user_id, email, access_token, refresh_token } }
 export interface SignupResponse {
   success: boolean;
   message: string;
-  user_id?: string;
-  email?: string;
-  access_token?: string;
-  refresh_token?: string;
+  data: {
+    user_id: string;
+    email: string;
+    access_token: string;
+    refresh_token: string;
+  };
 }
 
 export interface AuthContextType {
