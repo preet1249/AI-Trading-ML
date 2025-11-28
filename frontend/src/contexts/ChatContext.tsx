@@ -3,18 +3,22 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import apiClient from '@/lib/api-client';
 import { Chat, ChatMetadata, ChatContextType, Message } from '@/types/chat';
+import { useAuth } from './AuthContext';
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
   const [currentChat, setCurrentChat] = useState<Chat | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatMetadata[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // Load chat history on mount
+  // Load chat history only when authenticated
   useEffect(() => {
-    refreshHistory();
-  }, []);
+    if (!isLoading && isAuthenticated) {
+      refreshHistory();
+    }
+  }, [isAuthenticated, isLoading]);
 
   const refreshHistory = async () => {
     setIsLoadingHistory(true);

@@ -65,7 +65,10 @@ apiClient.interceptors.response.use(
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
 
-        if (typeof window !== 'undefined') {
+        // Only redirect if not already on login/signup page
+        if (typeof window !== 'undefined' &&
+            !window.location.pathname.startsWith('/login') &&
+            !window.location.pathname.startsWith('/signup')) {
           window.location.href = '/login';
         }
         return Promise.reject(refreshError);
