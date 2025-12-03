@@ -308,7 +308,9 @@ class AuthService:
             "iat": datetime.utcnow(),
             "exp": datetime.utcnow() + timedelta(hours=1)
         }
-        return jwt.encode(payload, settings.SUPABASE_JWT_SECRET, algorithm="HS256")
+        token = jwt.encode(payload, settings.SUPABASE_JWT_SECRET, algorithm="HS256")
+        # Ensure token is string (PyJWT < 2.0 returns bytes)
+        return token.decode('utf-8') if isinstance(token, bytes) else token
 
     @classmethod
     def _create_refresh_token(cls, user_id: str) -> str:
@@ -319,7 +321,9 @@ class AuthService:
             "iat": datetime.utcnow(),
             "exp": datetime.utcnow() + timedelta(days=7)
         }
-        return jwt.encode(payload, settings.SUPABASE_JWT_SECRET, algorithm="HS256")
+        token = jwt.encode(payload, settings.SUPABASE_JWT_SECRET, algorithm="HS256")
+        # Ensure token is string (PyJWT < 2.0 returns bytes)
+        return token.decode('utf-8') if isinstance(token, bytes) else token
 
     @staticmethod
     def _validate_email(email: str) -> bool:

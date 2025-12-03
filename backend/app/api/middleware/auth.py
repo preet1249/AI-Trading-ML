@@ -82,6 +82,12 @@ async def get_current_user(
         HTTPException: If authentication fails
     """
     token = credentials.credentials
+
+    # Debug: Log token info
+    print(f"[AUTH DEBUG] Token length: {len(token)}")
+    print(f"[AUTH DEBUG] Token segments: {len(token.split('.'))}")
+    print(f"[AUTH DEBUG] Token preview: {token[:50]}..." if len(token) > 50 else f"[AUTH DEBUG] Full token: {token}")
+
     payload = await verify_token(token)
 
     # Extract user info from token
