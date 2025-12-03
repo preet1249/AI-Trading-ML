@@ -62,11 +62,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const loadChat = async (chatId: string) => {
     try {
+      console.log(`📂 Loading chat: ${chatId}`);
       const response = await apiClient.get(`/api/v1/chat/${chatId}`);
-      if (response.data.success) {
+      if (response.data.success && response.data.chat) {
+        console.log(`✅ Chat loaded: ${chatId} with ${response.data.chat.messages?.length || 0} messages`);
         setCurrentChat(response.data.chat);
+      } else {
+        console.error('❌ Failed to load chat: No chat data in response');
+        throw new Error('No chat data received');
       }
     } catch (error: any) {
+      console.error(`❌ Error loading chat ${chatId}:`, error);
       throw new Error(error.message || 'Failed to load chat');
     }
   };

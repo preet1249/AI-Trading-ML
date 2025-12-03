@@ -18,9 +18,12 @@ export default function ChatHistorySidebar() {
 
   const handleLoadChat = async (chatId: string) => {
     try {
+      console.log(`🖱️ User clicked on chat: ${chatId}`);
       await loadChat(chatId);
+      console.log(`✅ Successfully loaded chat: ${chatId}`);
     } catch (error: any) {
-      console.error('Failed to load chat:', error);
+      console.error('❌ Failed to load chat:', error);
+      alert(`Failed to load chat: ${error.message || 'Unknown error'}`);
     }
   };
 

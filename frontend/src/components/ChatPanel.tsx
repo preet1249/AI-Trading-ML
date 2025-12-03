@@ -27,7 +27,7 @@ export default function ChatPanel() {
     scrollToBottom();
   }, [messages]);
 
-  // Load messages from current chat (only when chat ID changes)
+  // Load messages from current chat (when chat changes or updates)
   useEffect(() => {
     if (currentChat && currentChat.messages) {
       const chatMessages: Message[] = currentChat.messages.map((msg) => ({
@@ -36,11 +36,13 @@ export default function ChatPanel() {
         prediction: msg.prediction,
       }));
       setMessages(chatMessages);
+      console.log(`✅ Loaded ${chatMessages.length} messages for chat ${currentChat.id}`);
     } else if (!currentChat) {
       // Only clear messages if there's no current chat
       setMessages([]);
+      console.log('🧹 Cleared messages (no current chat)');
     }
-  }, [currentChat?.id]); // Only re-run when chat ID changes, not on every currentChat update
+  }, [currentChat?.id, currentChat?.updated_at, currentChat?.messages?.length]); // Trigger on ID, update time, or message count change
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
