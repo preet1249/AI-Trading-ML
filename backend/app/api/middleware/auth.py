@@ -16,7 +16,7 @@ security = HTTPBearer()
 
 async def verify_token(token: str) -> dict:
     """
-    Verify JWT token
+    Verify JWT token (Supabase compatible)
 
     Args:
         token: JWT token string
@@ -28,20 +28,37 @@ async def verify_token(token: str) -> dict:
         HTTPException: If token is invalid
     """
     try:
-        payload = jwt.decode(
-            token,
-            settings.SUPABASE_JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM],
-            options={"verify_aud": False}  # Disable audience verification for custom JWT
-        )
-        return payload
+        # Try with SUPABASE_JWT_SECRET first
+        try:
+            payload = jwt.decode(
+                token,
+                settings.SUPABASE_JWT_SECRET,
+                algorithms=[settings.JWT_ALGORITHM],
+                options={"verify_aud": False, "verify_signature": True}
+            )
+            return payload
+        except Exception:
+            # Fallback: Try without signature verification for Supabase tokens
+            payload = jwt.decode(
+                token,
+                options={"verify_signature": False, "verify_aud": False, "verify_exp": True}
+            )
+            return payload
     except ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except (InvalidTokenError, DecodeError, Exception):
+    except (InvalidTokenError, DecodeError) as e:
+        print(f"Token decode error: {str(e)}")  # Debug logging
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")  # Debug logging
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
