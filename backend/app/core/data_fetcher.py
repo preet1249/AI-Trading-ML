@@ -9,13 +9,20 @@ NO MOCK DATA - Production-ready
 """
 from typing import List, Dict
 import logging
+import json
+import hashlib
 
 from app.services.binance import binance_service
 from app.services.coincap import coincap_service
 from app.services.twelve_data import twelve_data_service
 from app.services.yahoo_finance import yahoo_finance_service
+from app.db.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
+
+# Aggressive caching to prevent rate limits (5 minutes for crypto, 3 minutes for stocks)
+CRYPTO_CACHE_TTL = 300  # 5 minutes
+STOCK_CACHE_TTL = 180    # 3 minutes
 
 
 async def fetch_candles(
@@ -25,10 +32,11 @@ async def fetch_candles(
 ) -> List[Dict]:
     """
     Fetch real candle data for any symbol (crypto or stock)
+    WITH AGGRESSIVE CACHING to prevent rate limits
 
     Automatically detects:
-    - Crypto symbols (BTCUSDT, ETHUSDT, etc.) → Binance
-    - Stock symbols (AAPL, TSLA, RELIANCE.NS, etc.) → Twelve Data
+    - Crypto symbols (BTCUSDT, ETHUSDT, etc.) → Binance → CoinCap fallback
+    - Stock symbols (AAPL, TSLA, RELIANCE.NS, etc.) → Twelve Data → Yahoo fallback
 
     Args:
         symbol: Trading symbol (e.g., BTCUSDT, AAPL, RELIANCE.NS)
@@ -41,6 +49,19 @@ async def fetch_candles(
     try:
         # Normalize symbol format for Binance (fix BTC-USD → BTCUSDT)
         symbol = _normalize_symbol(symbol)
+
+        # Check cache first (prevents rate limits)
+        cache_key = f"candles:{symbol}:{timeframe}:{limit}"
+        redis_client = await get_redis()
+
+        if redis_client:
+            try:
+                cached_data = await redis_client.get(cache_key)
+                if cached_data:
+                    logger.info(f"🎯 Cache HIT for {symbol} {timeframe} - Preventing API call")
+                    return json.loads(cached_data)
+            except Exception as cache_error:
+                logger.warning(f"Cache read error: {cache_error}")
 
         # Detect if crypto or stock
         is_crypto = _is_crypto_symbol(symbol)
@@ -93,6 +114,20 @@ async def fetch_candles(
             raise Exception(f"No data returned for {symbol}")
 
         logger.info(f"Successfully fetched {len(candles)} candles for {symbol}")
+
+        # Cache the results (aggressive caching to prevent rate limits)
+        if redis_client:
+            try:
+                ttl = CRYPTO_CACHE_TTL if is_crypto else STOCK_CACHE_TTL
+                await redis_client.setex(
+                    cache_key,
+                    ttl,
+                    json.dumps(candles)
+                )
+                logger.info(f"💾 Cached {symbol} data for {ttl}s to prevent rate limits")
+            except Exception as cache_error:
+                logger.warning(f"Cache write error: {cache_error}")
+
         return candles
 
     except Exception as e:

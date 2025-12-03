@@ -4,6 +4,8 @@ Unlimited, real-time crypto data - Perfect fallback when Binance is blocked
 NO API KEY NEEDED - Completely free
 """
 import aiohttp
+import ssl
+import certifi
 import logging
 from typing import List, Dict
 from datetime import datetime
@@ -118,7 +120,13 @@ class CoinCapService:
                 "interval": coincap_interval
             }
 
-            async with aiohttp.ClientSession() as session:
+            # Create SSL context with certifi certificates (fixes Render DNS/SSL issues)
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+
+            timeout = aiohttp.ClientTimeout(total=10)
+
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
                 async with session.get(url, params=params) as response:
                     if response.status != 200:
                         error_text = await response.text()
@@ -173,7 +181,12 @@ class CoinCapService:
 
             url = f"{cls.BASE_URL}/assets/{coincap_symbol}"
 
-            async with aiohttp.ClientSession() as session:
+            # Create SSL context with certifi certificates
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            timeout = aiohttp.ClientTimeout(total=10)
+
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
                 async with session.get(url) as response:
                     if response.status != 200:
                         raise Exception(f"CoinCap API error: {response.status}")
