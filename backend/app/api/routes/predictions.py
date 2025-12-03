@@ -4,10 +4,11 @@ Handles prediction creation with intelligent multi-agent workflow
 - Saves predictions to MongoDB + Supabase
 - Automatic outcome tracking
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from typing import List, Optional
 from pydantic import BaseModel, Field
 import logging
+import asyncio
 
 from app.api.middleware.auth import get_current_user
 from app.agents.graph import prediction_workflow
@@ -15,6 +16,9 @@ from app.models.schemas import User
 from app.services.prediction_service import prediction_service
 
 logger = logging.getLogger(__name__)
+
+# Timeout for prediction workflow (60 seconds)
+PREDICTION_TIMEOUT = 60
 
 router = APIRouter()
 
@@ -110,14 +114,23 @@ async def create_prediction(
             "prediction": {}
         }
 
-        # Run LangGraph multi-agent workflow
+        # Run LangGraph multi-agent workflow with timeout protection
         logger.info("Starting LangGraph prediction workflow...")
-        final_state = await prediction_workflow.ainvoke(initial_state)
-
-        logger.info(
-            f"Prediction completed: {final_state.get('symbol')} - "
-            f"{final_state.get('prediction', {}).get('direction', 'UNKNOWN')}"
-        )
+        try:
+            final_state = await asyncio.wait_for(
+                prediction_workflow.ainvoke(initial_state),
+                timeout=PREDICTION_TIMEOUT
+            )
+            logger.info(
+                f"Prediction completed: {final_state.get('symbol')} - "
+                f"{final_state.get('prediction', {}).get('direction', 'UNKNOWN')}"
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Prediction workflow timeout after {PREDICTION_TIMEOUT}s for query: {request.query}")
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail=f"Prediction took too long (>{PREDICTION_TIMEOUT}s). This may be due to API rate limits or data source issues. Please try again in a few minutes."
+            )
 
         # Extract prediction data
         prediction = final_state.get("prediction", {})

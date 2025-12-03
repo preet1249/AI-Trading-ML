@@ -52,7 +52,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         };
         setCurrentChat(newChat);
         await refreshHistory();
+        return newChat; // Return the created chat
       }
+      throw new Error('Failed to create chat');
     } catch (error: any) {
       throw new Error(error.message || 'Failed to create new chat');
     }
@@ -78,11 +80,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     let chatToUse = currentChat;
 
     if (!chatToUse) {
-      // Create new chat if none exists and wait for it
-      await createNewChat();
-      // Wait a bit for state to update
-      await new Promise(resolve => setTimeout(resolve, 100));
-      chatToUse = currentChat;
+      // Create new chat if none exists and get the returned chat
+      try {
+        chatToUse = await createNewChat();
+      } catch (error) {
+        console.error('Failed to create chat:', error);
+        return;
+      }
     }
 
     if (!chatToUse) {
