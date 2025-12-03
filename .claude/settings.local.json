@@ -21,7 +21,13 @@
       "Bash(pip uninstall:*)",
       "Bash(test:*)",
       "Bash(ls:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(curl -s https://ai-trading-ml.onrender.com/)",
+      "Bash(curl:*)",
+      "Bash(tail:*)",
+      "Bash(timeout:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

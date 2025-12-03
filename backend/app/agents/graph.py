@@ -58,7 +58,7 @@ async def parse_query_node(state: AgentState) -> AgentState:
         market_status = {}
 
         if not symbol:
-            # Try AI-powered stock detection first (works for ANY company worldwide)
+            # STEP 1: Try AI-powered stock detection first (works for ANY company worldwide)
             stock_symbol, stock_exchange, stock_type = await stock_intelligence.detect_stock_with_ai(query)
 
             if stock_symbol:
@@ -75,46 +75,80 @@ async def parse_query_node(state: AgentState) -> AgentState:
                     "exchange": exchange
                 }
 
-                logger.info(f"Stock detected: {symbol} on {exchange}")
+                logger.info(f"✅ AI detected stock: {symbol} on {exchange}")
                 logger.info(f"Market status: {status_msg}")
 
             else:
-                # Try crypto extraction
-                symbol = extract_symbol_from_query(query)
-                if not symbol:
-                    # Ask Qwen to extract symbol
-                    symbol = await extract_symbol_with_qwen(query)
+                # STEP 2: Try pattern-based stock detection (fallback for known companies)
+                stock_symbol, stock_exchange, stock_type = stock_intelligence.detect_and_normalize_symbol(query)
 
-                # Determine if crypto or stock based on symbol format
-                from app.core.data_fetcher import _is_crypto_symbol
-                is_crypto = _is_crypto_symbol(symbol) if symbol else False
+                if stock_symbol:
+                    # Stock detected via patterns!
+                    symbol = stock_symbol
+                    exchange = stock_exchange
+                    market_type = stock_type
 
-                if is_crypto:
-                    # Crypto - no market hours restriction
-                    market_type = "crypto"
-                    exchange = "Binance"
-                    market_status = {
-                        "is_open": True,
-                        "message": "Crypto market is always open (24/7)",
-                        "exchange": exchange
-                    }
-                else:
-                    # Stock - assume US market by default
-                    market_type = "stock"
-                    exchange = "US"
+                    # Check market hours
                     is_open, status_msg = stock_intelligence.is_market_open(exchange)
                     market_status = {
                         "is_open": is_open,
                         "message": status_msg,
                         "exchange": exchange
                     }
-                    logger.info(f"Stock symbol detected: {symbol} on {exchange}")
+
+                    logger.info(f"✅ Pattern detected stock: {symbol} on {exchange}")
+                    logger.info(f"Market status: {status_msg}")
+
+                else:
+                    # STEP 3: Try crypto extraction
+                    symbol = extract_symbol_from_query(query)
+                    if not symbol:
+                        # Ask Qwen to extract symbol
+                        symbol = await extract_symbol_with_qwen(query)
+
+                    # Determine if crypto or stock based on symbol format
+                    from app.core.data_fetcher import _is_crypto_symbol
+                    is_crypto = _is_crypto_symbol(symbol) if symbol else False
+
+                    if is_crypto:
+                        # Crypto - no market hours restriction
+                        market_type = "crypto"
+                        exchange = "Binance"
+                        market_status = {
+                            "is_open": True,
+                            "message": "Crypto market is always open (24/7)",
+                            "exchange": exchange
+                        }
+                        logger.info(f"✅ Crypto detected: {symbol}")
+                    else:
+                        # Stock - check if it has exchange suffix
+                        if "." in symbol:
+                            # Has exchange suffix (e.g., RELIANCE.NS)
+                            if ".NS" in symbol:
+                                exchange = "NSE"
+                            elif ".BO" in symbol:
+                                exchange = "BSE"
+                            else:
+                                exchange = "Unknown"
+                            market_type = "stock"
+                        else:
+                            # No suffix - assume US stock
+                            market_type = "stock"
+                            exchange = "NASDAQ"
+
+                        is_open, status_msg = stock_intelligence.is_market_open(exchange)
+                        market_status = {
+                            "is_open": is_open,
+                            "message": status_msg,
+                            "exchange": exchange
+                        }
+                        logger.info(f"Stock symbol detected: {symbol} on {exchange}")
 
         # Determine analysis type
         analysis_type = determine_analysis_type(query_lower)
 
-        # Select appropriate timeframes
-        timeframes = select_timeframes(query_lower, analysis_type)
+        # Select appropriate timeframes (adjust for market type)
+        timeframes = select_timeframes(query_lower, analysis_type, market_type)
 
         logger.info(
             f"Parsed: symbol={symbol}, type={analysis_type}, "
@@ -323,33 +357,50 @@ def determine_analysis_type(query: str) -> str:
     return "short_term"
 
 
-def select_timeframes(query: str, analysis_type: str) -> List[str]:
+def select_timeframes(query: str, analysis_type: str, market_type: str = "crypto") -> List[str]:
     """
-    Intelligently select timeframes based on query and analysis type
+    Intelligently select timeframes based on query, analysis type, and market type
 
     Multi-timeframe approach: LTF (entry) + MTF (trend) + HTF (bias)
 
-    ULTRA_SCALPING: 1m (entry) + 5m (trend) + 15m (bias)
-    SCALPING: 5m (entry) + 15m (trend) + 1h (bias)
-    SHORT_TERM: 15m (entry) + 1h (trend) + 4h (bias)
-    SWING: 1h (entry) + 4h (trend) + 1d (bias)
-    LONG_TERM: 4h (entry) + 1d (trend) + 1w (bias)
+    CRYPTO (real-time data from Binance):
+    - ULTRA_SCALPING: 1m (entry) + 5m (trend) + 15m (bias)
+    - SCALPING: 5m (entry) + 15m (trend) + 1h (bias)
+    - SHORT_TERM: 15m (entry) + 1h (trend) + 4h (bias)
+    - SWING: 1h (entry) + 4h (trend) + 1d (bias)
+    - LONG_TERM: 4h (entry) + 1d (trend) + 1w (bias)
+
+    STOCKS (delayed data from Yahoo Finance):
+    - SHORT_TERM (day trading): 1h (entry) + 4h (trend) + 1d (bias)
+    - SWING: 4h (entry) + 1d (trend) + 1w (bias)
+    - LONG_TERM: 1d (entry) + 1w (trend) + 1w (confirmation)
 
     Examples:
-    - "BTC prediction today newyork session" → ultra_scalping → ["1m", "5m", "15m"]
-    - "scalp ETHUSDT" → scalping → ["5m", "15m", "1h"]
-    - "day trading AAPL today" → short_term → ["15m", "1h", "4h"]
-    - "swing trade BTC this week" → swing → ["1h", "4h", "1d"]
-    - "long term Bitcoin investment" → long_term → ["4h", "1d", "1w"]
+    - "BTC scalp" → crypto → ["5m", "15m", "1h"]
+    - "AAPL day trading" → stock → ["1h", "4h", "1d"]
+    - "Reliance swing trade" → stock → ["4h", "1d", "1w"]
     """
-    # Comprehensive timeframe mapping
-    timeframe_map = {
-        "ultra_scalping": ["1m", "5m", "15m"],  # Session trading
-        "scalping": ["5m", "15m", "1h"],        # Intraday quick trades
-        "short_term": ["15m", "1h", "4h"],      # Day trading
-        "swing": ["1h", "4h", "1d"],            # Multi-day swings
-        "long_term": ["4h", "1d", "1w"]         # Position trading
-    }
+    # STOCKS: Only 1h, 4h, 1d, 1w (no scalping due to 15min delay)
+    if market_type == "stock":
+        stock_timeframe_map = {
+            "ultra_scalping": ["1h", "4h", "1d"],  # Map to day trading
+            "scalping": ["1h", "4h", "1d"],         # Map to day trading
+            "short_term": ["1h", "4h", "1d"],       # Day trading
+            "swing": ["4h", "1d", "1w"],            # Swing trading
+            "long_term": ["1d", "1w", "1w"]         # Long-term
+        }
+        timeframe_map = stock_timeframe_map
+        logger.info(f"📊 STOCK timeframes selected (no scalping, delayed data): {analysis_type}")
+    else:
+        # CRYPTO: Full range including scalping (real-time data)
+        timeframe_map = {
+            "ultra_scalping": ["1m", "5m", "15m"],  # Session trading
+            "scalping": ["5m", "15m", "1h"],        # Intraday quick trades
+            "short_term": ["15m", "1h", "4h"],      # Day trading
+            "swing": ["1h", "4h", "1d"],            # Multi-day swings
+            "long_term": ["4h", "1d", "1w"]         # Position trading
+        }
+        logger.info(f"💰 CRYPTO timeframes selected (with scalping, real-time): {analysis_type}")
 
     query_lower = query.lower()
 
@@ -396,11 +447,16 @@ def select_timeframes(query: str, analysis_type: str) -> List[str]:
 
 def should_skip_news(state: AgentState) -> str:
     """
-    Conditional routing: Skip news for ultra-short-term scalping
+    Conditional routing: Smart news inclusion based on asset type
 
-    News relevance:
-    - Ultra-scalping (1m-5m): Skip news (price action only)
-    - Scalping (5m-15m): Skip news (technical focus)
+    STOCKS (Indian/US):
+    - ALWAYS include news (delayed data needs fundamental context)
+    - News provides edge when data is delayed
+    - < 24h news for relevance
+
+    CRYPTO:
+    - Ultra-scalping (1m-5m): Skip news (price action only, real-time data)
+    - Scalping (5m-15m): Skip news (technical focus, real-time data)
     - Short-term+ (15m+): Include news (fundamental impact)
 
     Returns:
@@ -408,10 +464,16 @@ def should_skip_news(state: AgentState) -> str:
         "news" - include news analysis
     """
     analysis_type = state.get("analysis_type", "short_term")
+    market_type = state.get("market_type", "unknown")
 
-    # Skip news for ultra-fast timeframes (1m-15m)
+    # STOCKS: ALWAYS include news (delayed data benefits from fundamental context)
+    if market_type == "stock":
+        logger.info(f"✅ Including news for STOCK (market_type={market_type}) - fundamental analysis important for delayed data")
+        return "news"
+
+    # CRYPTO: Skip news for ultra-fast scalping (real-time data, technical only)
     if analysis_type in ["ultra_scalping", "scalping"]:
-        logger.info(f"Skipping news for {analysis_type} - focusing on price action")
+        logger.info(f"Skipping news for CRYPTO {analysis_type} - real-time price action focus")
         # Set minimal news data
         state["news_data"] = {
             "sentiment": "neutral",
@@ -421,7 +483,7 @@ def should_skip_news(state: AgentState) -> str:
         }
         return "predict"
 
-    # Include news for day trading and beyond (15m+)
+    # Include news for crypto day trading and beyond (15m+)
     return "news"
 
 

@@ -49,22 +49,14 @@ async def predict_node(state: Dict) -> Dict:
 
         logger.info(f"Prediction Agent synthesizing data for {symbol} ({market_type})")
 
-        # Check market hours for stocks
+        # Check market hours for stocks (but continue with prediction using historical data)
+        is_market_closed = False
+        market_closed_message = ""
+
         if market_type == "stock" and market_status.get("is_open") == False:
-            logger.warning(f"Market closed for {symbol}")
-            return {
-                "prediction": {
-                    "symbol": symbol,
-                    "exchange": exchange,
-                    "market_type": market_type,
-                    "direction": "NEUTRAL",
-                    "confidence": 0,
-                    "market_closed": True,
-                    "reasoning": market_status.get("message", "Market is currently closed"),
-                    "message": market_status.get("message", "Market is currently closed"),
-                    "error": "MARKET_CLOSED"
-                }
-            }
+            is_market_closed = True
+            market_closed_message = market_status.get("message", "Market is currently closed")
+            logger.info(f"📅 Market closed for {symbol} - generating NEXT TRADING DAY prediction using historical data + news")
 
         # Check if we have valid data
         if ta_data.get("error") or news_data.get("error"):
@@ -171,13 +163,25 @@ async def predict_node(state: Dict) -> Dict:
                 "S1": primary_analysis.get("pivots", {}).get("S1")
             },
             "order_blocks": order_blocks[:2] if order_blocks else [],
-            "market_condition": market_condition
+            "market_condition": market_condition,
+            # Market status
+            "market_closed": is_market_closed,
+            "market_status_message": market_closed_message,
+            "exchange": exchange,
+            "market_type": market_type
         }
 
-        logger.info(
-            f"Prediction Agent completed: {final_prediction['direction']} "
-            f"(confidence: {confidence}%, risk: {risk_level})"
-        )
+        # Log prediction type
+        if is_market_closed:
+            logger.info(
+                f"📅 NEXT DAY Prediction completed for {symbol}: {final_prediction['direction']} "
+                f"(confidence: {confidence}%, risk: {risk_level}) - Market closed, using historical data + news"
+            )
+        else:
+            logger.info(
+                f"Prediction Agent completed: {final_prediction['direction']} "
+                f"(confidence: {confidence}%, risk: {risk_level})"
+            )
 
         return {"prediction": final_prediction}
 

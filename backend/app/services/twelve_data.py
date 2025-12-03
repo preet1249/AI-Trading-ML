@@ -34,6 +34,35 @@ class TwelveDataService:
         "1w": "1week"
     }
 
+    @staticmethod
+    def normalize_symbol_for_twelvedata(symbol: str) -> str:
+        """
+        Normalize symbol to TwelveData format
+
+        TwelveData uses colon separator for exchanges:
+        - ADANIGREEN.NS → ADANIGREEN:NSE
+        - RELIANCE.BO → RELIANCE:BSE
+        - AAPL → AAPL (US stocks unchanged)
+
+        Args:
+            symbol: Symbol in standard format
+
+        Returns:
+            Symbol in TwelveData format
+        """
+        # Indian NSE stocks
+        if symbol.endswith(".NS"):
+            base_symbol = symbol[:-3]  # Remove .NS
+            return f"{base_symbol}:NSE"
+
+        # Indian BSE stocks
+        if symbol.endswith(".BO"):
+            base_symbol = symbol[:-3]  # Remove .BO
+            return f"{base_symbol}:BSE"
+
+        # US and other stocks - no change needed
+        return symbol
+
     @classmethod
     async def fetch_time_series(
         cls,
@@ -56,20 +85,23 @@ class TwelveDataService:
             if not settings.TWELVE_DATA_API_KEY:
                 raise Exception("TWELVE_DATA_API_KEY not configured")
 
+            # Normalize symbol for TwelveData format
+            normalized_symbol = cls.normalize_symbol_for_twelvedata(symbol)
+
             # Map interval
             td_interval = cls.TIMEFRAME_MAP.get(interval, "1h")
 
             # Build API URL
             url = f"{cls.BASE_URL}/time_series"
             params = {
-                "symbol": symbol,
+                "symbol": normalized_symbol,
                 "interval": td_interval,
                 "outputsize": min(outputsize, 5000),
                 "apikey": settings.TWELVE_DATA_API_KEY,
                 "format": "JSON"
             }
 
-            logger.info(f"Fetching Twelve Data: {symbol} {interval} (outputsize: {outputsize})")
+            logger.info(f"Fetching Twelve Data: {symbol} → {normalized_symbol} {interval} (outputsize: {outputsize})")
 
             # Make API request
             async with aiohttp.ClientSession() as session:
@@ -126,9 +158,12 @@ class TwelveDataService:
             if not settings.TWELVE_DATA_API_KEY:
                 raise Exception("TWELVE_DATA_API_KEY not configured")
 
+            # Normalize symbol for TwelveData format
+            normalized_symbol = cls.normalize_symbol_for_twelvedata(symbol)
+
             url = f"{cls.BASE_URL}/quote"
             params = {
-                "symbol": symbol,
+                "symbol": normalized_symbol,
                 "apikey": settings.TWELVE_DATA_API_KEY
             }
 

@@ -66,8 +66,14 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     JWT_ALGORITHM: str = "HS256"  # JWT algorithm for token verification
+    JWT_SECRET: Optional[str] = None  # Legacy JWT secret (optional)
+    JWT_EXPIRATION_HOURS: Optional[int] = 24  # Legacy expiration (optional)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Google Search API (optional)
+    GOOGLE_CUSTOM_SEARCH_API_KEY: Optional[str] = None
+    GOOGLE_SEARCH_ENGINE_ID: Optional[str] = None
 
     # ============================================
     # Rate Limiting (Scalable)

@@ -1,13 +1,19 @@
 """
 Unified Data Fetcher - REAL DATA
-Automatically routes to Binance (crypto) or Twelve Data (stocks)
+Automatically routes to:
+- Binance (crypto - primary, works on CLI)
+- CoinCap (crypto - fallback when Binance blocked in production)
+- Twelve Data (US stocks - free plan)
+- Yahoo Finance (Indian stocks + fallback - always free)
 NO MOCK DATA - Production-ready
 """
 from typing import List, Dict
 import logging
 
 from app.services.binance import binance_service
+from app.services.coincap import coincap_service
 from app.services.twelve_data import twelve_data_service
+from app.services.yahoo_finance import yahoo_finance_service
 
 logger = logging.getLogger(__name__)
 
@@ -40,19 +46,48 @@ async def fetch_candles(
         is_crypto = _is_crypto_symbol(symbol)
 
         if is_crypto:
-            logger.info(f"Fetching crypto data for {symbol} from Binance")
-            candles = await binance_service.fetch_klines(
-                symbol=symbol,
-                interval=timeframe,
-                limit=limit
-            )
+            # Try Binance first (works on CLI, may be blocked in production)
+            # Fall back to CoinCap if Binance fails (free, unlimited, works everywhere)
+            try:
+                logger.info(f"Fetching crypto data for {symbol} from Binance")
+                candles = await binance_service.fetch_klines(
+                    symbol=symbol,
+                    interval=timeframe,
+                    limit=limit
+                )
+            except Exception as binance_error:
+                logger.warning(f"Binance failed (likely regional block): {binance_error}")
+                logger.info(f"💎 Using CoinCap (FREE fallback) for {symbol}")
+                candles = await coincap_service.fetch_klines(
+                    symbol=symbol,
+                    interval=timeframe,
+                    limit=limit
+                )
         else:
-            logger.info(f"Fetching stock data for {symbol} from Twelve Data")
-            candles = await twelve_data_service.fetch_time_series(
-                symbol=symbol,
-                interval=timeframe,
-                outputsize=limit
-            )
+            # Try TwelveData first (better for US stocks on free plan)
+            # Fall back to Yahoo Finance for Indian stocks or if quota exceeded
+            try:
+                logger.info(f"Fetching stock data for {symbol} from Twelve Data")
+                candles = await twelve_data_service.fetch_time_series(
+                    symbol=symbol,
+                    interval=timeframe,
+                    outputsize=limit
+                )
+            except Exception as td_error:
+                # Check if error is due to paid plan requirement or quota
+                error_msg = str(td_error).lower()
+                if "grow" in error_msg or "plan" in error_msg or "quota" in error_msg or "upgrade" in error_msg:
+                    logger.warning(f"TwelveData requires paid plan for {symbol}, falling back to Yahoo Finance")
+                else:
+                    logger.warning(f"TwelveData error: {td_error}, falling back to Yahoo Finance")
+
+                # Fallback to Yahoo Finance (FREE for all stocks)
+                logger.info(f"📊 Using Yahoo Finance (FREE) for {symbol}")
+                candles = await yahoo_finance_service.fetch_candles(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    limit=limit
+                )
 
         if not candles:
             raise Exception(f"No data returned for {symbol}")
@@ -81,10 +116,20 @@ async def get_current_price(symbol: str) -> float:
         is_crypto = _is_crypto_symbol(symbol)
 
         if is_crypto:
-            return await binance_service.get_current_price(symbol)
+            # Try Binance first, fallback to CoinCap
+            try:
+                return await binance_service.get_current_price(symbol)
+            except Exception as binance_error:
+                logger.warning(f"Binance price failed, using CoinCap: {binance_error}")
+                return await coincap_service.get_current_price(symbol)
         else:
-            quote = await twelve_data_service.get_quote(symbol)
-            return quote["price"]
+            # Try TwelveData first, fallback to Yahoo Finance
+            try:
+                quote = await twelve_data_service.get_quote(symbol)
+                return quote["price"]
+            except Exception as td_error:
+                logger.warning(f"TwelveData price error, using Yahoo Finance: {td_error}")
+                return await yahoo_finance_service.get_current_price(symbol)
 
     except Exception as e:
         logger.error(f"Error fetching current price for {symbol}: {str(e)}")

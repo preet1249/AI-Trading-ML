@@ -153,6 +153,12 @@ class StockIntelligence:
             "close": time(15, 30),  # 3:30 PM IST
             "days": [0, 1, 2, 3, 4]  # Monday-Friday
         },
+        "BSE": {
+            "timezone": "Asia/Kolkata",
+            "open": time(9, 15),   # 9:15 AM IST
+            "close": time(15, 30),  # 3:30 PM IST
+            "days": [0, 1, 2, 3, 4]  # Monday-Friday
+        },
         "NASDAQ": {
             "timezone": "America/New_York",
             "open": time(9, 30),   # 9:30 AM EST

@@ -15,7 +15,7 @@ import asyncio
 import logging
 
 from app.config import settings
-from app.api.routes import chat, predictions, health
+from app.api.routes import chat, predictions, health, cli
 from app.services.websocket import sio
 
 # Database clients
@@ -79,6 +79,7 @@ socket_app = socketio.ASGIApp(
 
 # Health & existing routes
 app.include_router(health.router, tags=["Health"])
+app.include_router(cli.router, prefix="/api/v1", tags=["CLI"])  # Simple CLI endpoint (no auth)
 app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
 app.include_router(predictions.router, prefix="/api/v1", tags=["Predictions"])
 
