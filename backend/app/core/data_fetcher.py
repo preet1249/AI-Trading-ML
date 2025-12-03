@@ -52,11 +52,12 @@ async def fetch_candles(
 
         # Check cache first (prevents rate limits)
         cache_key = f"candles:{symbol}:{timeframe}:{limit}"
-        redis_client = await get_redis()
+        redis_client = get_redis()  # Get RedisClient (not awaited)
 
-        if redis_client:
+        if redis_client and redis_client._initialized:
             try:
-                cached_data = await redis_client.get(cache_key)
+                # Use the async Redis client directly
+                cached_data = await redis_client.client.get(cache_key)
                 if cached_data:
                     logger.info(f"🎯 Cache HIT for {symbol} {timeframe} - Preventing API call")
                     return json.loads(cached_data)
@@ -116,10 +117,11 @@ async def fetch_candles(
         logger.info(f"Successfully fetched {len(candles)} candles for {symbol}")
 
         # Cache the results (aggressive caching to prevent rate limits)
-        if redis_client:
+        if redis_client and redis_client._initialized:
             try:
                 ttl = CRYPTO_CACHE_TTL if is_crypto else STOCK_CACHE_TTL
-                await redis_client.setex(
+                # Use the async Redis client directly
+                await redis_client.client.setex(
                     cache_key,
                     ttl,
                     json.dumps(candles)

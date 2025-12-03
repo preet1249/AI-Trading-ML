@@ -74,20 +74,31 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     aiResponse: any,
     predictionData?: any
   ) => {
-    if (!currentChat) {
-      // Create new chat if none exists
+    // Ensure we have a current chat before saving
+    let chatToUse = currentChat;
+
+    if (!chatToUse) {
+      // Create new chat if none exists and wait for it
       await createNewChat();
+      // Wait a bit for state to update
+      await new Promise(resolve => setTimeout(resolve, 100));
+      chatToUse = currentChat;
+    }
+
+    if (!chatToUse) {
+      console.error('No chat available to save message');
+      return;
     }
 
     try {
       await apiClient.post('/api/v1/chat/save', {
-        chat_id: currentChat!.id,
+        chat_id: chatToUse.id,
         user_message: userMessage,
         ai_response: { content: aiResponse },
         prediction_data: predictionData,
       });
 
-      // Update local state
+      // Update local state immediately
       const userMsg: Message = {
         role: 'user',
         content: userMessage,
@@ -104,9 +115,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentChat(prev => prev ? {
         ...prev,
         messages: [...prev.messages, userMsg, aiMsg],
+        updated_at: new Date().toISOString(),
       } : null);
 
-      await refreshHistory();
+      // Refresh history in background (don't wait)
+      refreshHistory().catch(err => console.error('Failed to refresh history:', err));
     } catch (error: any) {
       console.error('Failed to save message:', error);
     }

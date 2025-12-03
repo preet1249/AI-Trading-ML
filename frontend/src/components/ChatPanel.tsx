@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import apiClient from '@/lib/api-client';
 import { useChat } from '@/contexts/ChatContext';
 import PredictionDisplay from './PredictionDisplay';
@@ -16,20 +16,31 @@ export default function ChatPanel() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load messages from current chat
+  // Auto-scroll to bottom when new messages arrive
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   useEffect(() => {
-    if (currentChat) {
+    scrollToBottom();
+  }, [messages]);
+
+  // Load messages from current chat (only when chat ID changes)
+  useEffect(() => {
+    if (currentChat && currentChat.messages) {
       const chatMessages: Message[] = currentChat.messages.map((msg) => ({
         type: msg.role === 'user' ? 'user' : 'ai',
         content: msg.content,
         prediction: msg.prediction,
       }));
       setMessages(chatMessages);
-    } else {
+    } else if (!currentChat) {
+      // Only clear messages if there's no current chat
       setMessages([]);
     }
-  }, [currentChat]);
+  }, [currentChat?.id]); // Only re-run when chat ID changes, not on every currentChat update
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +130,7 @@ export default function ChatPanel() {
             <span className="text-sm">Analyzing...</span>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       <form onSubmit={handleSubmit} className="p-4 border-t border-zinc-800">
