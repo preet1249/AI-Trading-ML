@@ -17,8 +17,8 @@ from app.services.prediction_service import prediction_service
 
 logger = logging.getLogger(__name__)
 
-# Timeout for prediction workflow (60 seconds)
-PREDICTION_TIMEOUT = 60
+# Timeout for prediction workflow (120 seconds - allows for multiple AI API calls)
+PREDICTION_TIMEOUT = 120
 
 router = APIRouter()
 

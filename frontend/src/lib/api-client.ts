@@ -2,13 +2,13 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-// Create axios instance with longer timeout for predictions
+// Create axios instance with long timeout for AI predictions
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 90000, // 90 seconds (AI predictions can take time)
+  timeout: 150000, // 150 seconds (2.5 min - AI predictions + network latency)
 });
 
 // Request interceptor - Add auth token

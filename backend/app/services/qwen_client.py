@@ -4,6 +4,8 @@ Integration with Qwen 3 via OpenRouter
 NO MOCK DATA - Production-ready
 """
 import aiohttp
+import ssl
+import certifi
 import json
 from typing import Dict, List, Optional
 import logging
@@ -11,6 +13,9 @@ import logging
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Timeout for AI API calls (30 seconds - AI generation can take time)
+AI_API_TIMEOUT = 30
 
 
 class QwenClient:
@@ -67,10 +72,15 @@ class QwenClient:
                 "X-Title": "AI Trading Predictor"
             }
 
-            logger.info(f"Calling Qwen API (model: {self.model})")
+            logger.info(f"Calling Qwen API (model: {self.model}) with {AI_API_TIMEOUT}s timeout")
 
-            # Make API request
-            async with aiohttp.ClientSession() as session:
+            # Create SSL context and timeout for production reliability
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            timeout = aiohttp.ClientTimeout(total=AI_API_TIMEOUT)
+
+            # Make API request with timeout protection
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
                 async with session.post(
                     f"{self.base_url}/chat/completions",
                     json=payload,
