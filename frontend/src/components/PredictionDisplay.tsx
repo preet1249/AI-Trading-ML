@@ -50,21 +50,54 @@ export default function PredictionDisplay({ prediction }: { prediction: any }) {
           {prediction.direction === 'NEUTRAL' && '➡️ '}
           {prediction.direction} Prediction
         </h1>
-        <div className="flex items-center gap-2 mt-1">
+        <div className="flex flex-wrap items-center gap-2 mt-2">
           <span className={`px-2 py-1 rounded text-xs font-semibold ${getRiskColor(prediction.risk_level)}`}>
             {prediction.risk_level} RISK
           </span>
           <span className="text-zinc-500 text-sm">
             Confidence: <span className="text-white font-semibold">{prediction.confidence}%</span>
           </span>
+          {prediction.symbol && (
+            <span className="text-zinc-500 text-sm">
+              Symbol: <span className="text-white font-semibold">{prediction.symbol}</span>
+            </span>
+          )}
+          {prediction.timeframe && (
+            <span className="text-zinc-500 text-sm">
+              Timeframe: <span className="text-white font-semibold">{prediction.timeframe}</span>
+            </span>
+          )}
         </div>
+        {prediction.market_condition && (
+          <div className="mt-2 text-sm text-zinc-400">
+            <strong>Market Condition:</strong> {prediction.market_condition}
+          </div>
+        )}
       </div>
 
-      {/* H2: Best Entry Point */}
+      {/* Current Price & Analysis Type */}
+      {(prediction.current_price || prediction.analysis_type) && (
+        <div className="flex gap-4 text-sm">
+          {prediction.current_price && (
+            <div className="bg-zinc-900/50 rounded px-3 py-2">
+              <div className="text-zinc-500 text-xs">Current Price</div>
+              <div className="text-white font-bold text-lg">${prediction.current_price}</div>
+            </div>
+          )}
+          {prediction.analysis_type && (
+            <div className="bg-zinc-900/50 rounded px-3 py-2">
+              <div className="text-zinc-500 text-xs">Analysis Type</div>
+              <div className="text-white font-semibold capitalize">{prediction.analysis_type}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* H2: Best Entry Point & Range */}
       {prediction.entry_price && (
         <div>
-          <h2 className="text-lg font-semibold text-white mb-2">🎯 Best Entry Point</h2>
-          <div className="bg-emerald-900/30 border border-emerald-700 rounded-lg p-3">
+          <h2 className="text-lg font-semibold text-white mb-2">🎯 Entry Point{prediction.entry_range_low ? ' & Range' : ''}</h2>
+          <div className="bg-emerald-900/30 border border-emerald-700 rounded-lg p-3 space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-2xl font-bold text-emerald-400">${prediction.entry_price}</div>
@@ -79,6 +112,63 @@ export default function PredictionDisplay({ prediction }: { prediction: any }) {
                 </div>
               )}
             </div>
+
+            {/* Entry Range */}
+            {(prediction.entry_range_low || prediction.entry_range_high) && (
+              <div className="border-t border-emerald-700 pt-3">
+                <div className="text-xs text-emerald-300 mb-2 font-semibold">📊 Entry Range:</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {prediction.entry_range_low && (
+                    <div className="bg-emerald-900/20 rounded px-2 py-1">
+                      <div className="text-xs text-emerald-400">Low: ${prediction.entry_range_low}</div>
+                    </div>
+                  )}
+                  {prediction.entry_range_high && (
+                    <div className="bg-emerald-900/20 rounded px-2 py-1">
+                      <div className="text-xs text-emerald-400">High: ${prediction.entry_range_high}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* H2: Support & Resistance Levels */}
+      {(prediction.support_levels || prediction.resistance_levels) && (
+        <div>
+          <h2 className="text-lg font-semibold text-white mb-2">🎚️ Key Support & Resistance</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {/* Support Levels */}
+            {prediction.support_levels && prediction.support_levels.length > 0 && (
+              <div className="bg-emerald-900/20 border border-emerald-700 rounded-lg p-3">
+                <div className="text-sm font-semibold text-emerald-400 mb-2">📉 Support Levels</div>
+                <div className="space-y-1">
+                  {prediction.support_levels.map((level: any, i: number) => (
+                    <div key={i} className="text-xs text-emerald-300 flex justify-between">
+                      <span>S{i + 1}:</span>
+                      <span className="font-semibold">${typeof level === 'object' ? level.price : level}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Resistance Levels */}
+            {prediction.resistance_levels && prediction.resistance_levels.length > 0 && (
+              <div className="bg-red-900/20 border border-red-700 rounded-lg p-3">
+                <div className="text-sm font-semibold text-red-400 mb-2">📈 Resistance Levels</div>
+                <div className="space-y-1">
+                  {prediction.resistance_levels.map((level: any, i: number) => (
+                    <div key={i} className="text-xs text-red-300 flex justify-between">
+                      <span>R{i + 1}:</span>
+                      <span className="font-semibold">${typeof level === 'object' ? level.price : level}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
