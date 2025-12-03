@@ -15,9 +15,16 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('access_token');
-    if (token && config.headers) {
+
+    // Validate token before adding to headers
+    if (token && token !== 'undefined' && token !== 'null' && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else if (token === 'undefined' || token === 'null') {
+      // Clear invalid token
+      console.warn('⚠️ Invalid token detected, clearing...');
+      localStorage.removeItem('access_token');
     }
+
     return config;
   },
   (error) => {
@@ -46,13 +53,28 @@ apiClient.interceptors.response.use(
           refresh_token: refreshToken,
         });
 
-        const { access_token, refresh_token: newRefreshToken } = response.data;
+        // Extract tokens from response (handle both nested and flat response)
+        const responseData = response.data.data || response.data;
+        const access_token = responseData.access_token;
+        const newRefreshToken = responseData.refresh_token;
+
+        console.log('🔄 Token refresh response:', {
+          hasAccessToken: !!access_token,
+          hasRefreshToken: !!newRefreshToken
+        });
+
+        if (!access_token) {
+          console.error('❌ No access token in refresh response:', response.data);
+          throw new Error('No access token in refresh response');
+        }
 
         // Save new tokens
         localStorage.setItem('access_token', access_token);
         if (newRefreshToken) {
           localStorage.setItem('refresh_token', newRefreshToken);
         }
+
+        console.log('✅ Tokens refreshed and saved');
 
         // Retry original request with new token
         if (originalRequest.headers) {

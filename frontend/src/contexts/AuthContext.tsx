@@ -118,10 +118,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refresh_token: refreshToken,
       });
 
-      const { access_token, refresh_token: newRefreshToken } = response.data;
+      // Handle both nested and flat response structure
+      const responseData = response.data.data || response.data;
+      const access_token = responseData.access_token;
+      const newRefreshToken = responseData.refresh_token;
 
-      if (access_token) localStorage.setItem('access_token', access_token);
-      if (newRefreshToken) localStorage.setItem('refresh_token', newRefreshToken);
+      if (!access_token) {
+        console.error('❌ No access token in refresh response');
+        return false;
+      }
+
+      localStorage.setItem('access_token', access_token);
+      if (newRefreshToken) {
+        localStorage.setItem('refresh_token', newRefreshToken);
+      }
 
       return true;
     } catch (error) {
