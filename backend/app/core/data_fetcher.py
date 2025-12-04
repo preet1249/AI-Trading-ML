@@ -20,9 +20,9 @@ from app.db.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 
-# Aggressive caching to prevent rate limits (5 minutes for crypto, 3 minutes for stocks)
-CRYPTO_CACHE_TTL = 300  # 5 minutes
-STOCK_CACHE_TTL = 180    # 3 minutes
+# SUPER AGGRESSIVE caching to PERMANENTLY prevent Binance bans
+CRYPTO_CACHE_TTL = 1800  # 30 minutes (prevents 99% of Binance API calls)
+STOCK_CACHE_TTL = 600    # 10 minutes
 
 
 async def fetch_candles(

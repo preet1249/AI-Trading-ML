@@ -6,11 +6,16 @@ NO API KEY NEEDED - Completely free
 import aiohttp
 import ssl
 import certifi
+import asyncio
 import logging
 from typing import List, Dict
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# Retry configuration for DNS failures
+MAX_RETRIES = 3
+RETRY_DELAY = 2  # seconds
 
 
 class CoinCapService:
@@ -120,22 +125,38 @@ class CoinCapService:
                 "interval": coincap_interval
             }
 
-            # Create SSL context with certifi certificates (fixes Render DNS/SSL issues)
-            ssl_context = ssl.create_default_context(cafile=certifi.where())
-            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            # Retry logic for DNS/SSL failures (Render network issues)
+            last_error = None
+            for attempt in range(MAX_RETRIES):
+                try:
+                    # Create SSL context with certifi certificates (fixes Render DNS/SSL issues)
+                    ssl_context = ssl.create_default_context(cafile=certifi.where())
+                    connector = aiohttp.TCPConnector(ssl=ssl_context, force_close=True)
 
-            timeout = aiohttp.ClientTimeout(total=10)
+                    timeout = aiohttp.ClientTimeout(total=15)  # Increased timeout
 
-            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-                async with session.get(url, params=params) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        raise Exception(f"CoinCap API error: {response.status} - {error_text}")
+                    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                        async with session.get(url, params=params) as response:
+                            if response.status != 200:
+                                error_text = await response.text()
+                                raise Exception(f"CoinCap API error: {response.status} - {error_text}")
 
-                    data = await response.json()
+                            data = await response.json()
 
-                    if "data" not in data:
-                        raise Exception(f"No data returned from CoinCap for {coincap_symbol}")
+                            if "data" not in data:
+                                raise Exception(f"No data returned from CoinCap for {coincap_symbol}")
+
+                    # Success - break retry loop
+                    break
+
+                except (aiohttp.ClientConnectorError, asyncio.TimeoutError) as e:
+                    last_error = e
+                    if attempt < MAX_RETRIES - 1:
+                        logger.warning(f"CoinCap DNS/connection error (attempt {attempt + 1}/{MAX_RETRIES}): {str(e)}")
+                        await asyncio.sleep(RETRY_DELAY * (attempt + 1))  # Exponential backoff
+                    else:
+                        logger.error(f"CoinCap failed after {MAX_RETRIES} attempts: {str(e)}")
+                        raise Exception(f"Cannot connect to CoinCap after {MAX_RETRIES} attempts: {str(e)}")
 
             # Parse candles
             candles = []

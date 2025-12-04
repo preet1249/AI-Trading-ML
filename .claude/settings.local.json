@@ -1,33 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(tree:*)",
-      "Bash(FOLDER_TREE.txt 2)",
-      "Bash(nul)",
-      "Bash(dir:*)",
-      "Bash(FOLDER_TREE.txt)",
-      "Bash(git init:*)",
-      "Bash(git config:*)",
+      "Bash(git restore:*)",
       "Bash(git add:*)",
-      "Bash(if exist nul del nul)",
       "Bash(git commit:*)",
-      "Bash(git branch:*)",
-      "Bash(git remote add:*)",
-      "Bash(git push:*)",
-      "Bash(\"C:\\Users\\mt\\AI Agents\\Trading agent (ML)\\backend\\app\\api\\predict.py\")",
-      "Bash(python -m pip install:*)",
-      "Bash(python:*)",
-      "Bash(pip install:*)",
-      "Bash(pip uninstall:*)",
-      "Bash(test:*)",
-      "Bash(ls:*)",
-      "Bash(find:*)",
-      "Bash(curl -s https://ai-trading-ml.onrender.com/)",
-      "Bash(curl:*)",
-      "Bash(tail:*)",
-      "Bash(timeout:*)",
-      "Bash(netstat:*)",
-      "Bash(findstr:*)"
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
